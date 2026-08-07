@@ -5,6 +5,7 @@ import { existsSync } from 'node:fs';
 import cp from 'node:child_process';
 import chownr from 'chownr';
 import util from 'node:util';
+import os from 'node:os';
 
 import config from './config.ts';
 import globals from './globals.ts';
@@ -512,14 +513,12 @@ export default class Package {
             const script_path = path.join(this.install_path, `.${name}`);
             await Bun.write(script_path, render_build(script));
 
-            // npm, pip and cargo all want a writable HOME. The API inherits
-            // HOME=/root from the entrypoint's su, while the piston user's home
-            // is /home/piston, which useradd -M never created - so npm gets
-            // EACCES trying to mkdir it. Point HOME at a scratch directory
-            // inside the package, removed afterwards so its caches do not end
-            // up in the published archive.
-            const home = path.join(this.install_path, '.home');
-            await fs.mkdir(home, { recursive: true });
+            // npm, pip and cargo all want a writable HOME, and the API inherits
+            // HOME=/root from the entrypoint's su, which it cannot write to.
+            // Point at the piston user's own home - the image creates it, and
+            // tools that ignore $HOME in favour of getpwuid (the JVM, hence
+            // Maven's ~/.m2) land in the same place rather than a second one.
+            const home = os.homedir();
 
             const result = await run('bash', [script_path], {
                 cwd: this.install_path,
@@ -530,7 +529,6 @@ export default class Package {
                 },
             });
             await fs.rm(script_path, { force: true });
-            await fs.rm(home, { recursive: true, force: true });
 
             if (result.stdout.trim()) log(result.stdout.trim());
             if (result.stderr.trim()) log(result.stderr.trim());

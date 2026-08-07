@@ -49,7 +49,12 @@ RUN apt-get update && \
     libsundials-dev libpcre2-dev libcap-dev \
     unzip zstd ca-certificates && \
     rm -rf /var/lib/apt/lists/*
-RUN useradd -M piston
+# -m, not -M: the account needs a real home directory. The JVM derives
+# user.home from getpwuid rather than $HOME, so Maven writes to ~/.m2 no matter
+# what the environment says - and without the directory that is a hard failure.
+# npm and pip hit the same thing from the other direction. Jobs are unaffected:
+# they run under isolate with HOME=/tmp and no bind mount of /home.
+RUN useradd -m piston
 COPY --from=bun /usr/local/bin/bun /usr/local/bin/bun
 COPY --from=isolate /usr/local/bin/isolate /usr/local/bin
 COPY --from=isolate /usr/local/etc/isolate /usr/local/etc/isolate
