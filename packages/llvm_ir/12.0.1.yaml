@@ -14,7 +14,9 @@ compile: |
     clang binary.s -o binary
 run: |
     shift
-    binary "$@"
+    # ./ matters: the sandbox PATH no longer ends in the current directory,
+    # so that a submitted file cannot shadow a system binary.
+    ./binary "$@"
 test:
     language: ll
     expect: OK
