@@ -137,30 +137,43 @@ router.ws('/connect', async (ws, req) => {
     let job = null;
     let event_bus = new events.EventEmitter();
 
+    // A job outlives the socket that started it, so anything it emits after the
+    // client is gone has nowhere to go
+    const send = payload => {
+        if (ws.readyState === ws.OPEN) {
+            ws.send(JSON.stringify(payload));
+        }
+    };
+
     event_bus.on('stdout', data =>
-        ws.send(
-            JSON.stringify({
-                type: 'data',
-                stream: 'stdout',
-                data: data.toString(),
-            })
-        )
+        send({
+            type: 'data',
+            stream: 'stdout',
+            data: data.toString(),
+        })
     );
     event_bus.on('stderr', data =>
-        ws.send(
-            JSON.stringify({
-                type: 'data',
-                stream: 'stderr',
-                data: data.toString(),
-            })
-        )
+        send({
+            type: 'data',
+            stream: 'stderr',
+            data: data.toString(),
+        })
     );
-    event_bus.on('stage', stage =>
-        ws.send(JSON.stringify({ type: 'stage', stage }))
-    );
+    event_bus.on('stage', stage => send({ type: 'stage', stage }));
     event_bus.on('exit', (stage, status) =>
-        ws.send(JSON.stringify({ type: 'exit', stage, ...status }))
+        send({ type: 'exit', stage, ...status })
     );
+
+    ws.on('close', () => {
+        // Kill whatever is still running so the job releases its slot and
+        // sandbox now, instead of holding both until it times out on its own
+        logger.debug('WebSocket closed, killing any in-flight stage');
+        event_bus.emit('signal', 'SIGKILL');
+    });
+
+    ws.on('error', e => {
+        logger.debug(`WebSocket error: ${e.message}`);
+    });
 
     ws.on('message', async data => {
         try {
@@ -174,13 +187,11 @@ router.ws('/connect', async (ws, req) => {
                         try {
                             const box = await job.prime();
 
-                            ws.send(
-                                JSON.stringify({
-                                    type: 'runtime',
-                                    language: job.runtime.language,
-                                    version: job.runtime.version.raw,
-                                })
-                            );
+                            send({
+                                type: 'runtime',
+                                language: job.runtime.language,
+                                version: job.runtime.version.raw,
+                            });
 
                             await job.execute(box, event_bus);
                         } catch (error) {
@@ -222,7 +233,7 @@ router.ws('/connect', async (ws, req) => {
                     break;
             }
         } catch (error) {
-            ws.send(JSON.stringify({ type: 'error', message: error.message }));
+            send({ type: 'error', message: error.message });
             ws.close(4002, 'Notified Error');
             // ws.close message is limited to 123 characters, so we notify over WS then close.
         }

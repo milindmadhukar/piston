@@ -3,24 +3,20 @@ const path = require('path');
 const chalk = require('chalk');
 const WebSocket = require('ws');
 
+// Signals the API accepts (api/src/globals.js), minus the ones Node can't trap.
+// Sending anything outside this set closes the socket with 4005.
 const SIGNALS = [
     'SIGABRT',
     'SIGALRM',
     'SIGBUS',
     'SIGCHLD',
-    'SIGCLD',
     'SIGCONT',
-    'SIGEMT',
     'SIGFPE',
     'SIGHUP',
     'SIGILL',
-    'SIGINFO',
     'SIGINT',
     'SIGIO',
-    'SIGIOT',
-    'SIGLOST',
     'SIGPIPE',
-    'SIGPOLL',
     'SIGPROF',
     'SIGPWR',
     'SIGQUIT',
@@ -32,7 +28,6 @@ const SIGNALS = [
     'SIGTRAP',
     'SIGTTIN',
     'SIGTTOU',
-    'SIGUNUSED',
     'SIGURG',
     'SIGUSR1',
     'SIGUSR2',

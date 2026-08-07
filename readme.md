@@ -367,6 +367,10 @@ Errors may return status codes as follows:
 -   **4004: Can only write to stdin**: The client attempted to write to a stream other than stdin.
 -   **4005: Invalid Signal**: An invalid signal was sent in a `signal` packet.
 
+Note that signals are delivered to the sandbox supervisor rather than directly to the sandboxed program. Process-stopping signals (`SIGSTOP`, `SIGTSTP`, `SIGTTIN`, `SIGTTOU`) are accepted but never delivered: suspending the supervisor would leave the sandboxed program running with nothing left to enforce its execution limits.
+
+Closing the WebSocket terminates any stage still running, so an abandoned connection releases its sandbox immediately rather than running out its remaining timeout.
+
 <br>
 
 # Supported Languages

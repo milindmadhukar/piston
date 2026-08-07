@@ -14,6 +14,10 @@ const job_states = {
 
 const MAX_BOX_ID = 999;
 const ISOLATE_PATH = '/usr/local/bin/isolate';
+// Signals whose default action stops a process. Forwarding one of these would
+// suspend the isolate process itself, leaving the sandboxed program running with
+// nothing left to enforce its limits, so they are accepted but never delivered.
+const STOP_SIGNALS = ['SIGSTOP', 'SIGTSTP', 'SIGTTIN', 'SIGTTOU'];
 let box_id = 0;
 
 let remaining_job_spaces = config.max_concurrent_jobs;
@@ -145,6 +149,9 @@ class Job {
         let status = null;
         let cpu_time_stat = null;
         let wall_time_stat = null;
+        let killed_by_signal = null;
+        let stdin_handler = null;
+        let signal_handler = null;
 
         const proc = cp.spawn(
             ISOLATE_PATH,
@@ -183,18 +190,42 @@ class Job {
             }
         );
 
+        proc.stdin.on('error', e => {
+            // Writing to a process that has closed its end of the pipe raises
+            // EPIPE here, which would take down the API if left unhandled
+            this.logger.debug('Got error while writing to stdin:', e);
+        });
+
         if (event_bus === null) {
             proc.stdin.write(this.stdin);
             proc.stdin.end();
             proc.stdin.destroy();
         } else {
-            event_bus.on('stdin', data => {
+            stdin_handler = data => {
                 proc.stdin.write(data);
-            });
+            };
 
-            event_bus.on('kill', signal => {
-                proc.kill(signal);
-            });
+            signal_handler = signal => {
+                if (STOP_SIGNALS.includes(signal)) {
+                    this.logger.debug(`Ignoring stop signal ${signal}`);
+                    return;
+                }
+                try {
+                    if (proc.kill(signal)) {
+                        killed_by_signal = signal;
+                    }
+                } catch (e) {
+                    // Could already be dead, or be a signal Node has no name for
+                    // (SIGRTMIN+n); neither should take down the job
+                    this.logger.debug(
+                        `Got error while sending ${signal} to process ${proc.pid}:`,
+                        e
+                    );
+                }
+            };
+
+            event_bus.on('stdin', stdin_handler);
+            event_bus.on('signal', signal_handler);
         }
 
         proc.stderr.on('data', async data => {
@@ -247,19 +278,29 @@ class Job {
             }
         });
 
-        const data = await new Promise((res, rej) => {
-            proc.on('exit', (_, signal) => {
-                res({
-                    signal,
+        let data;
+        try {
+            data = await new Promise((res, rej) => {
+                proc.on('exit', (_, signal) => {
+                    res({
+                        signal,
+                    });
                 });
-            });
 
-            proc.on('error', err => {
-                rej({
-                    error: err,
+                proc.on('error', err => {
+                    rej({
+                        error: err,
+                    });
                 });
             });
-        });
+        } finally {
+            // safe_call runs once per stage against a shared event bus, so the
+            // handlers have to go when the stage does
+            if (event_bus !== null) {
+                event_bus.off('stdin', stdin_handler);
+                event_bus.off('signal', signal_handler);
+            }
+        }
 
         try {
             const metadata_str = (
@@ -302,9 +343,26 @@ class Job {
                 }
             }
         } catch (e) {
-            throw new Error(
-                `Error reading metadata file: ${box.metadata_file_path}\nError: ${e.message}\nIsolate run stdout: ${stdout}\nIsolate run stderr: ${stderr}`
+            if (killed_by_signal === null) {
+                throw new Error(
+                    `Error reading metadata file: ${box.metadata_file_path}\nError: ${e.message}\nIsolate run stdout: ${stdout}\nIsolate run stderr: ${stderr}`
+                );
+            }
+            // A signal the isolate process cannot catch, SIGKILL in particular,
+            // takes it out before it writes its metadata file. Fall through and
+            // report the signal instead of failing the whole job.
+            this.logger.debug(
+                `Missing metadata file after sending ${killed_by_signal}: ${e.message}`
             );
+        }
+
+        if (killed_by_signal !== null && code === null && signal === null) {
+            // Isolate was signalled by the client and went down without
+            // recording an exit status, so report what we know instead of
+            // leaving the client with no reason for the job ending
+            signal = data.signal ?? killed_by_signal;
+            status = status ?? 'SG';
+            message = message ?? `Killed by ${killed_by_signal}`;
         }
 
         return {
