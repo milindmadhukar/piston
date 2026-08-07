@@ -21,10 +21,12 @@ build: |
     cd ..
     rm -rf build
 
-    # A sample config (needed for each "project") is written to /etc
-    # We'll copy that into the local lib dir (fpc searches there too on compile)
-    mkdir lib/fpc/etc
-    cp -r /etc/fp* lib/fpc/etc/
+    # fpc needs an fpc.cfg to compile anything. The vendor installer writes one
+    # to /etc, which needs root - builds run unprivileged, so it was never there
+    # and the copy failed silently. fpcmkcfg generates the same file, which is
+    # what it exists for.
+    mkdir -p lib/fpc/etc
+    bin/fpcmkcfg -d "basepath=$PREFIX/lib/fpc/3.2.0" -o lib/fpc/etc/fpc.cfg
 env:
     PATH: '{pkgdir}/bin:{PATH}'
 compile: |
