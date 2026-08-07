@@ -60,10 +60,15 @@ REQUEST=$(
         const { parse_manifest } = await import("./api/src/manifest.ts");
         const file = process.argv[1];
         const m = parse_manifest(await Bun.file(file).text(), file);
+        const language = process.argv[2];
         process.stdout.write(JSON.stringify({
-            language: process.argv[2],
+            language,
             version: m.version,
-            files: [{ content: m.test.source }],
+            // Named test.<language>, which is the filename the old per-package
+            // test.<ext> files carried. Several compile stages key off the
+            // extension, and an unnamed file arrives as fileN.code - a real
+            // difference in behaviour, but not the one this is checking.
+            files: [{ name: `test.${language}`, content: m.test.source }],
         }));
     ' -- "$MANIFEST" "$TEST_LANGUAGE"
 )
