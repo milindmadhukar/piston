@@ -15,6 +15,11 @@ build: |
     rm erlang.tar.gz
 
     export ERL_TOP=$(pwd)
+
+    # OTP ships Makefile.in, not Makefile: without configure there is nothing
+    # for make to do. It was missing here, so make failed, make install failed,
+    # and the script still exited 0 - the package installed empty.
+    ./configure --prefix="$PREFIX"
     make -j$(nproc)
     make install -j$(nproc)
 
@@ -27,9 +32,12 @@ build: |
 
     PREFIX=$(realpath $(dirname $0))
 
-    mkdir -p build
+    # Its own directory, not `build`: the erlang build inlined above leaves its
+    # source tree there, and extracting elixir over it produced a tree with no
+    # top-level Makefile.
+    mkdir -p elixir-build
 
-    cd build
+    cd elixir-build
 
     curl -L "https://github.com/elixir-lang/elixir/archive/v1.11.3.tar.gz" -o elixir.tar.gz
     tar xzf elixir.tar.gz --strip-components=1
@@ -39,10 +47,10 @@ build: |
 
     cd ..
 
-    cp -r build/bin .
-    cp -r build/lib .
+    cp -r elixir-build/bin .
+    cp -r elixir-build/lib .
 
-    rm -rf build
+    rm -rf elixir-build
 
 env:
     LC_ALL: en_US.UTF-8
