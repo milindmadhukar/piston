@@ -3,9 +3,14 @@ version: '2.0.0'
 aliases: [japt]
 build: |
     # japt install
-    source ../../node/16.3.0/build.sh
+    # --- inlined from the former node/16.3.0 package ---
+    curl "https://nodejs.org/dist/v16.3.0/node-v16.3.0-linux-x64.tar.xz" -o node.tar.xz
+    tar xf node.tar.xz --strip-components=1
+    rm node.tar.xz
+    # --- end of node/16.3.0 ---
 
     git clone -q "https://github.com/Hydrazer/japt.git" japt
+
 env:
     PATH: '{pkgdir}/bin:{PATH}'
     JAPT_PATH: '{pkgdir}/japt'

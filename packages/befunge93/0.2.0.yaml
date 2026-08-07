@@ -3,7 +3,30 @@ version: '0.2.0'
 aliases: [b93]
 build: |
     # source python 2.7
-    source ../../python/2.7.18/build.sh
+    # --- inlined from the former python/2.7.18 package ---
+
+    PREFIX=$(realpath $(dirname $0))
+
+    mkdir -p build
+
+    cd build
+
+    curl "https://www.python.org/ftp/python/2.7.18/Python-2.7.18.tgz" -o python.tar.gz
+    tar xzf python.tar.gz --strip-components=1
+    rm python.tar.gz
+
+    ./configure --prefix "$PREFIX" --with-ensurepip=install
+    make -j$(nproc)
+    make install -j$(nproc)
+
+    cd ..
+
+    rm -rf build 
+    bin/pip2 install -U pip==20.3.*
+    # Upgrade pip to latest supported version
+
+    bin/pip2 install numpy scipy pycrypto whoosh bcrypt passlib
+    # --- end of python/2.7.18 ---
 
     # clone befunge repo
     git clone -q 'https://github.com/programble/befungee' befunge93
@@ -15,6 +38,7 @@ build: |
     git checkout tag/v0.2.0
 
     cd ..
+
 env:
     PATH: '{pkgdir}/bin:{PATH}'
     BEFUNGE93_PATH: '{pkgdir}/befunge93'

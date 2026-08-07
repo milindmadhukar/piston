@@ -2,7 +2,52 @@ language: osabie
 version: '1.0.1'
 aliases: [osabie, 05AB1E, usable]
 build: |
-    source ../../elixir/1.11.3/build.sh
+    # --- inlined from the former elixir/1.11.3 package ---
+
+    # --- inlined from the former erlang/23.0.0 package ---
+
+    PREFIX=$(realpath $(dirname $0))
+
+    mkdir -p build
+
+    cd build
+
+    curl "http://erlang.org/download/otp_src_23.0.tar.gz" -o erlang.tar.gz
+    tar xzf erlang.tar.gz --strip-components=1
+    rm erlang.tar.gz
+
+    export ERL_TOP=$(pwd)
+    ./configure --prefix "$PREFIX"
+    make -j$(nproc)
+    make install -j$(nproc)
+
+    cd ..
+
+    rm -rf build
+    # --- end of erlang/23.0.0 ---
+
+    export PATH=$PWD/bin:$PATH
+
+    PREFIX=$(realpath $(dirname $0))
+
+    mkdir -p build
+
+    cd build
+
+    curl -L "https://github.com/elixir-lang/elixir/archive/v1.11.3.tar.gz" -o elixir.tar.gz
+    tar xzf elixir.tar.gz --strip-components=1
+    rm elixir.tar.gz
+
+    ./configure --prefix "$PREFIX"
+    make -j$(nproc)
+
+    cd ..
+
+    cp -r build/bin .
+    cp -r build/lib .
+
+    rm -rf build
+    # --- end of elixir/1.11.3 ---
 
     export PATH=$PWD/bin:$PATH
 
@@ -23,6 +68,7 @@ build: |
     cp -r build/* bin
 
     rm -rf build
+
 env:
     LC_ALL: en_US.UTF-8
     PATH: '{pkgdir}/bin:{PATH}'

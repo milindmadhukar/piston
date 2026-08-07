@@ -3,13 +3,33 @@ version: '1.0.0'
 aliases: [golfscript]
 build: |
     # golfscript was implemented as a Ruby script originally
-    source ../../ruby/2.5.1/build.sh
+    # --- inlined from the former ruby/2.5.1 package ---
+
+    PREFIX=$(realpath $(dirname $0))
+
+    mkdir -p build
+
+    cd build
+
+    curl "https://cache.ruby-lang.org/pub/ruby/2.5/ruby-2.5.1.tar.gz" -o ruby.tar.gz
+    tar xzf ruby.tar.gz --strip-components=1
+    rm ruby.tar.gz
+
+    ./configure --prefix "$PREFIX"
+    make -j$(nproc)
+    make install -j$(nproc)
+
+    cd ..
+
+    rm -rf build
+    # --- end of ruby/2.5.1 ---
 
     curl "http://www.golfscript.com/golfscript/golfscript.rb" -o bin/golfscript.rb
 
     # using the shebang to run it with the right Ruby
     sed -i "s|/usr/bin/|$PWD/bin/|g" bin/golfscript.rb
     chmod +x bin/golfscript.rb
+
 env:
     PATH: '{pkgdir}/bin:{PATH}'
 run: |

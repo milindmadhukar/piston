@@ -2,7 +2,27 @@ language: elixir
 version: '1.11.3'
 aliases: [elixir, exs]
 build: |
-    source ../../erlang/23.0.0/build.sh
+    # --- inlined from the former erlang/23.0.0 package ---
+
+    PREFIX=$(realpath $(dirname $0))
+
+    mkdir -p build
+
+    cd build
+
+    curl "http://erlang.org/download/otp_src_23.0.tar.gz" -o erlang.tar.gz
+    tar xzf erlang.tar.gz --strip-components=1
+    rm erlang.tar.gz
+
+    export ERL_TOP=$(pwd)
+    ./configure --prefix "$PREFIX"
+    make -j$(nproc)
+    make install -j$(nproc)
+
+    cd ..
+
+    rm -rf build
+    # --- end of erlang/23.0.0 ---
 
     export PATH=$PWD/bin:$PATH
 
@@ -25,6 +45,7 @@ build: |
     cp -r build/lib .
 
     rm -rf build
+
 env:
     LC_ALL: en_US.UTF-8
     PATH: '{pkgdir}/bin:{PATH}'
