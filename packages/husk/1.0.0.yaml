@@ -2,9 +2,26 @@ language: husk
 version: '1.0.0'
 aliases: []
 build: |
-    cp ../../haskell/9.0.1/build.sh ./haskell-build.sh
-    sed -Ei 's/9\.0\.1/8\.10\.7/g' ./haskell-build.sh
-    source ./haskell-build.sh
+    # --- inlined from the former haskell package, at the 8.10.7 that husk
+    # needs; it used to copy that build.sh and sed the version in place ---
+    PREFIX=$(realpath $(dirname $0))
+
+    mkdir -p build
+
+    cd build
+
+    # Platform specific because a true source compile would require GHC to be installed already on the latest
+    curl -L "https://downloads.haskell.org/~ghc/8.10.7/ghc-8.10.7-x86_64-deb10-linux.tar.xz" -o ghc.tar.xz
+    tar xf ghc.tar.xz --strip-components=1
+    rm ghc.tar.xz
+
+    ./configure --prefix="$PREFIX"
+    make install -j$(nproc)
+
+    cd ../
+
+    rm -rf build
+    # --- end of haskell 8.10.7 ---
 
     # compile Husk from source
     git clone -q "https://github.com/barbuz/husk.git"
@@ -13,7 +30,6 @@ build: |
 
     # cleanup
     cd ..
-    rm -f haskell-build.sh
 env:
     PATH: '{pkgdir}/bin:{PATH}'
     HUSK_PATH: '{pkgdir}/husk'
