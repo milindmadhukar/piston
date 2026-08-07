@@ -9,6 +9,11 @@ build: |
 
     cd ponyc
 
+    # DECnet is gone: Debian dropped linux/dn.h from linux-libc-dev, and
+    # ponyc 0.39 still includes it unconditionally. Upstream removed the
+    # include later; do the same here rather than pin an older libc-dev.
+    sed -i '/#include <linux\/dn.h>/d' src/libponyrt/lang/socket.c
+
     # release commit for 0.39.0
     git reset --hard 85d897b978c5082a1f3264a3a9ad479446d73984
 
