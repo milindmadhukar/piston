@@ -20,7 +20,7 @@ build: |
 
     rm -rf build 
 
-    bin/pip3 install numpy scipy pandas pycrypto whoosh bcrypt passlib
+    bin/pip3 install --prefer-binary numpy scipy pandas pycrypto whoosh bcrypt passlib
 env:
     PATH: '{pkgdir}/bin:{PATH}'
 run: |

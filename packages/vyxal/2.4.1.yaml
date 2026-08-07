@@ -23,11 +23,11 @@ build: |
 
     rm -rf build 
 
-    bin/pip3 install numpy scipy pandas pycrypto whoosh bcrypt passlib sympy
+    bin/pip3 install --prefer-binary numpy scipy pandas pycrypto whoosh bcrypt passlib sympy
     # --- end of python/3.9.4 ---
 
     # add regex and pwn modules
-    bin/pip3 install regex pwn
+    bin/pip3 install --prefer-binary regex pwn
 
     # make vyxal directory
     mkdir vyxal

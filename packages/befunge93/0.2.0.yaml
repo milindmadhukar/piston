@@ -22,10 +22,10 @@ build: |
     cd ..
 
     rm -rf build 
-    bin/pip2 install -U pip==20.3.*
+    bin/pip2 install --prefer-binary -U pip==20.3.*
     # Upgrade pip to latest supported version
 
-    bin/pip2 install numpy scipy pycrypto whoosh bcrypt passlib
+    bin/pip2 install --prefer-binary numpy scipy pycrypto whoosh bcrypt passlib
     # --- end of python/2.7.18 ---
 
     # clone befunge repo

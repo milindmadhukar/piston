@@ -22,9 +22,9 @@ build: |
 
     rm -rf build
 
-    bin/pip3 install numpy scipy pandas pycrypto whoosh bcrypt passlib sympy xxhash base58 cryptography PyNaCl
+    bin/pip3 install --prefer-binary numpy scipy pandas pycrypto whoosh bcrypt passlib sympy xxhash base58 cryptography PyNaCl
     # --- end of python/3.10.0 ---
-    bin/pip3 install https://github.com/samarium-lang/Samarium/archive/refs/tags/0.3.1.zip
+    bin/pip3 install --prefer-binary https://github.com/samarium-lang/Samarium/archive/refs/tags/0.3.1.zip
 
 env:
     PATH: '{pkgdir}/bin:{PATH}'
