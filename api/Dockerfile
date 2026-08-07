@@ -1,6 +1,16 @@
 FROM buildpack-deps:buster AS isolate
+# Buster is EOL and has moved to archive.debian.org, which still serves the
+# packages but with an expired Release file. Staying on buster keeps the
+# prebuilt language packages ABI-compatible.
+RUN printf '%s\n' \
+        'deb http://archive.debian.org/debian buster main' \
+        'deb http://archive.debian.org/debian-security buster/updates main' \
+        > /etc/apt/sources.list && \
+    rm -f /etc/apt/sources.list.d/*.list && \
+    echo 'Acquire::Check-Valid-Until "false";' \
+        > /etc/apt/apt.conf.d/99no-check-valid-until
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends git libcap-dev && \
+    apt-get install -y --no-install-recommends git libcap-dev ca-certificates && \
     rm -rf /var/lib/apt/lists/* && \
     git clone https://github.com/envicutor/isolate.git /tmp/isolate/ && \
     cd /tmp/isolate && \
@@ -11,6 +21,14 @@ RUN apt-get update && \
 FROM node:15.10.0-buster-slim
 
 ENV DEBIAN_FRONTEND=noninteractive
+
+RUN printf '%s\n' \
+        'deb http://archive.debian.org/debian buster main' \
+        'deb http://archive.debian.org/debian-security buster/updates main' \
+        > /etc/apt/sources.list && \
+    rm -f /etc/apt/sources.list.d/*.list && \
+    echo 'Acquire::Check-Valid-Until "false";' \
+        > /etc/apt/apt.conf.d/99no-check-valid-until
 
 RUN dpkg-reconfigure -p critical dash
 RUN apt-get update && \

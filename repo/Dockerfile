@@ -1,5 +1,14 @@
 FROM debian:buster-slim
 ENV DEBIAN_FRONTEND noninteractive
+# Buster is EOL and now served from archive.debian.org with an expired Release
+# file. Packages are built against buster, so stay on it rather than bumping.
+RUN printf '%s\n' \
+        'deb http://archive.debian.org/debian buster main' \
+        'deb http://archive.debian.org/debian-security buster/updates main' \
+        > /etc/apt/sources.list && \
+    rm -f /etc/apt/sources.list.d/*.list && \
+    echo 'Acquire::Check-Valid-Until "false";' \
+        > /etc/apt/apt.conf.d/99no-check-valid-until
 RUN apt-get update && apt-get install -y unzip autoconf build-essential libssl-dev \
         pkg-config zlib1g-dev libargon2-dev libsodium-dev libcurl4-openssl-dev \
         sqlite3 libsqlite3-dev libonig-dev libxml2 libxml2-dev bc curl git \
