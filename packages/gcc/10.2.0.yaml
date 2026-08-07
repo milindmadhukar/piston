@@ -11,7 +11,7 @@ provides:
       aliases: [fortran, f90]
 build: |
     # Put instructions to build your package in here
-    [[ -d "bin" ]] && exit 0
+    if [[ -d "bin" ]]; then exit 0; fi
     PREFIX=$(realpath $(dirname $0))
 
     mkdir -p build obj

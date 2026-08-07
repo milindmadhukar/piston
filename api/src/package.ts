@@ -13,6 +13,7 @@ import { runtimes, load_package } from './runtime.ts';
 import { error_message } from './errors.ts';
 import {
     is_engine_installable,
+    render_build,
     load_manifests,
     render_env,
     render_pkg_info,
@@ -509,7 +510,7 @@ export default class Package {
 
             log(`Running ${name}`);
             const script_path = path.join(this.install_path, `.${name}`);
-            await Bun.write(script_path, render_stage(script));
+            await Bun.write(script_path, render_build(script));
 
             const result = await run('bash', [script_path], {
                 cwd: this.install_path,

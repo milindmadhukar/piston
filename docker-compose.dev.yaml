@@ -36,3 +36,12 @@ services:
             - 2001:2000
         volumes:
             - ./data/piston-builder/packages:/piston/packages
+            # Manifests are baked into the image, so without this every manifest
+            # edit needs a rebuild before it takes effect. Mounting the working
+            # tree over them makes the dev loop an edit and a restart.
+            - ./packages:/piston_api/packages:ro
+        # Package builds run `make -j$(nproc)`, and nproc reports the host's core
+        # count. cpuset (rather than --cpus) is what actually narrows it, so a
+        # build cannot fork one compiler per host core and take the machine down.
+        cpuset: '0-5'
+        mem_limit: 5g

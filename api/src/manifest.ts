@@ -528,6 +528,20 @@ export function render_stage(body: string): string {
     return `#!/usr/bin/env bash\n\n${body.endsWith('\n') ? body : body + '\n'}`;
 }
 
+/**
+ * A build or post_install script, which unlike a stage script aborts on the
+ * first failing command.
+ *
+ * Without this a build that cannot find a source, or whose git checkout names a
+ * tag that does not exist, keeps going and exits with the status of whatever
+ * ran last - so the install reports success having produced nothing. `set -e`
+ * only goes on the install path; the compile and run stages keep the semantics
+ * the v2 execute contract was written against.
+ */
+export function render_build(body: string): string {
+    return render_stage(`set -e\n\n${body}`);
+}
+
 // ------------------------------------------------------------------ loading
 
 /** `<dir>/<language>/<version>.yaml` */
