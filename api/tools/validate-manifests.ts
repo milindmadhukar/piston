@@ -65,6 +65,26 @@ for (const manifest of selected) {
         note(where, 'is prebuilt but does not declare a glibc floor');
     }
 
+    // The migration derived test.language from the old test.<ext> filename,
+    // which is not always a name the runtime answers to - python2's test was
+    // test.py, but it provides py2 and python2, so `py` resolves to nothing and
+    // the package can never be tested.
+    if (manifest.test) {
+        const answers_to = new Set([
+            ...provided_languages(manifest),
+            ...(manifest.aliases ?? []),
+            ...(manifest.provides ?? []).flatMap(p => p.aliases ?? []),
+        ]);
+        const as = manifest.test.language ?? manifest.language;
+        if (!answers_to.has(as)) {
+            note(
+                where,
+                `test runs as "${as}", which this package does not provide ` +
+                    `(has: ${[...answers_to].join(', ')})`
+            );
+        }
+    }
+
     for (const language of provided_languages(manifest)) {
         if (language.trim() !== language || language === '') {
             note(where, `provides a malformed language name: "${language}"`);

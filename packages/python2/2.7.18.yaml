@@ -28,6 +28,6 @@ env:
 run: |
     python2.7 "$@"
 test:
-    language: py
+    language: python2
     expect: OK
     source: print "OK"
