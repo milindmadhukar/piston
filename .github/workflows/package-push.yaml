@@ -163,4 +163,6 @@ jobs:
                     echo '::error::refusing to publish an empty index'
                     exit 1
                   fi
-                  gh release upload pkgs index --clobber
+                  # --repo because this job has no checkout for gh to infer from.
+                  gh release upload pkgs index --clobber \
+                    --repo '${{ github.repository }}'
