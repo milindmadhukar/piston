@@ -65,9 +65,14 @@ case "$mode" in
         git cat-file -e "$base^{commit}" 2> /dev/null ||
             git fetch --no-tags --depth=1 origin "$base" > /dev/null 2>&1 || true
 
+        # awk rather than grep: grep exits 1 when nothing matches, which under
+        # `set -o pipefail` turns "this commit touched no packages" - the normal
+        # case for a commit that only changes code - into a failed selection.
         git diff --name-only "$base" "$head" -- packages/ |
-            grep -E '^packages/[^/]+/[^/]+\.yaml$' |
-            sed 's|^packages/||; s|\.yaml$||; s|/|-|' |
+            awk -F/ '
+                NF == 3 && $1 == "packages" && $3 ~ /\.yaml$/ {
+                    sub(/\.yaml$/, "", $3); print $2 "-" $3
+                }' |
             keep_existing
         ;;
     all)
