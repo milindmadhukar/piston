@@ -59,6 +59,11 @@ Manifests are **baked into the image** and are the whitelist: a language with no
 cannot be installed however the request is spelled. `PISTON_ALLOWED_LANGUAGES` narrows it
 further at runtime.
 
+Manifests are read **once, at boot**. `docker-compose.dev.yaml` mounts
+`packages/` over the baked-in copy so an edit does not need an image rebuild,
+but it does need a container restart - editing a manifest and reinstalling
+without one silently tests the previous version.
+
 ### Installing renders the manifest into the old on-disk layout
 
 `Package#install` writes `pkg-info.json`, `.env`, `run` and `compile` into
