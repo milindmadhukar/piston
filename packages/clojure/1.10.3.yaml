@@ -16,7 +16,7 @@ build: |
     # Clojure depends on Maven (build)
     mkdir -p maven
     cd maven
-    curl "https://apache.claz.org/maven/maven-3/3.6.3/binaries/apache-maven-3.6.3-bin.tar.gz" -o maven.tar.gz
+    curl "https://archive.apache.org/dist/maven/maven-3/3.6.3/binaries/apache-maven-3.6.3-bin.tar.gz" -o maven.tar.gz
     tar xzf maven.tar.gz --strip-components=1
     rm maven.tar.gz
     cd ..

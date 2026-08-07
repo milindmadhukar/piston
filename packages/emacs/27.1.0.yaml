@@ -12,7 +12,7 @@ build: |
 
     # Emacs version 27.1 supports Docker builds
     # Otherwise, older versions will work too, but you will have to disable `/proc/sys/kernel/randomize_va_space` which is less secure
-    curl -L "http://ftpmirror.gnu.org/emacs/emacs-27.1.tar.gz" -o emacs.tar.gz
+    curl -L "https://ftp.gnu.org/gnu/emacs/emacs-27.1.tar.gz" -o emacs.tar.gz
     tar xzf emacs.tar.gz --strip-components=1
     rm emacs.tar.gz
 

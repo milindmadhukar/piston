@@ -512,14 +512,25 @@ export default class Package {
             const script_path = path.join(this.install_path, `.${name}`);
             await Bun.write(script_path, render_build(script));
 
+            // npm, pip and cargo all want a writable HOME. The API inherits
+            // HOME=/root from the entrypoint's su, while the piston user's home
+            // is /home/piston, which useradd -M never created - so npm gets
+            // EACCES trying to mkdir it. Point HOME at a scratch directory
+            // inside the package, removed afterwards so its caches do not end
+            // up in the published archive.
+            const home = path.join(this.install_path, '.home');
+            await fs.mkdir(home, { recursive: true });
+
             const result = await run('bash', [script_path], {
                 cwd: this.install_path,
                 env: {
                     ...(process.env as Record<string, string>),
                     PREFIX: this.install_path,
+                    HOME: home,
                 },
             });
             await fs.rm(script_path, { force: true });
+            await fs.rm(home, { recursive: true, force: true });
 
             if (result.stdout.trim()) log(result.stdout.trim());
             if (result.stderr.trim()) log(result.stderr.trim());
@@ -528,10 +539,28 @@ export default class Package {
                 // A synchronous install reports only this message, so carry the
                 // tail of the output in it. Without that a failed build is just
                 // "exit code 1" and the reason is nowhere.
-                const tail = [result.stdout, result.stderr]
+                const lines = [result.stdout, result.stderr]
                     .join('\n')
                     .split('\n')
-                    .filter(line => line.trim().length > 0)
+                    .map(line => line.trim())
+                    // curl's progress meter is redrawn continuously and would
+                    // otherwise be the entire tail, hiding the actual error.
+                    .filter(
+                        line =>
+                            line.length > 0 &&
+                            !/^\d+\s+[\d.]+[KMG]?\s/.test(line) &&
+                            !line.startsWith('% Total') &&
+                            !line.startsWith('Dload')
+                    );
+
+                // Prefer lines that look like the failure over the last thing
+                // printed, which is often unrelated cleanup.
+                const interesting = lines.filter(line =>
+                    /error|failed|fatal|cannot|not found|no such|denied/i.test(
+                        line
+                    )
+                );
+                const tail = (interesting.length ? interesting : lines)
                     .slice(-8)
                     .join(' | ');
                 throw new Error(
