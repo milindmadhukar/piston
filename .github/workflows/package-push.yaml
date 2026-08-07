@@ -3,7 +3,7 @@ name: 'Package Pushed'
 on:
     push:
         branches:
-            - master
+            - main
             - v3
         paths:
             - packages/**

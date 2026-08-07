@@ -9,7 +9,7 @@ on:
             - .github/workflows/api-test.yaml
     push:
         branches:
-            - master
+            - main
             - v3
         paths:
             - api/**
