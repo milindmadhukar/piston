@@ -353,6 +353,32 @@ export default class Package {
     }
 
     async install(log: InstallLog = noop_log): Promise<PackageResult> {
+        // Tee everything to <install_path>/.install.log as well as to the
+        // caller. A synchronous install has nowhere else to put build output,
+        // and the log has to outlive a failure to be worth anything.
+        const transcript: string[] = [];
+        const tee: InstallLog = line => {
+            transcript.push(line);
+            log(line);
+        };
+
+        try {
+            return await this.#install(tee);
+        } finally {
+            if (transcript.length > 0 && existsSync(this.install_path)) {
+                await fs
+                    .writeFile(
+                        path.join(this.install_path, '.install.log'),
+                        transcript.join('\n') + '\n'
+                    )
+                    .catch(() => {
+                        /* a log we cannot write must not fail the install */
+                    });
+            }
+        }
+    }
+
+    async #install(log: InstallLog): Promise<PackageResult> {
         if (this.installed) {
             throw new Error('Already installed');
         }
@@ -498,7 +524,19 @@ export default class Package {
             if (result.stderr.trim()) log(result.stderr.trim());
 
             if (result.code !== 0) {
-                throw new Error(`${name} failed with exit code ${result.code}`);
+                // A synchronous install reports only this message, so carry the
+                // tail of the output in it. Without that a failed build is just
+                // "exit code 1" and the reason is nowhere.
+                const tail = [result.stdout, result.stderr]
+                    .join('\n')
+                    .split('\n')
+                    .filter(line => line.trim().length > 0)
+                    .slice(-8)
+                    .join(' | ');
+                throw new Error(
+                    `${name} failed with exit code ${result.code}` +
+                        (tail ? `: ${tail}` : '')
+                );
             }
         }
     }

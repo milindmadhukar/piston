@@ -68,53 +68,33 @@ CMD ["/piston_api/src/docker-entrypoint.sh"]
 EXPOSE 2000/tcp
 
 # ---------------------------------------------------------------------------
-# The builder variant: the same API plus the toolchain from repo/Dockerfile, so
-# it can run a manifest's `build` script itself instead of fetching an archive
-# CI produced. Opt in at runtime with PISTON_ALLOW_SOURCE_BUILDS=true.
+# The builder variant: the runtime image plus a toolchain, so it can run a
+# manifest's `build` script itself instead of fetching an archive CI produced.
+# Opt in with PISTON_ALLOW_SOURCE_BUILDS=true (already set here).
 #
-# Kept as a separate target on purpose. It flips /bin/sh to bash, which every
-# package build script assumes and which the default image deliberately does
-# not do, and it roughly doubles the image.
-FROM debian:buster-slim AS builder
+# Deliberately `FROM runtime`, not a second base. A package built here has to
+# run on the runtime image, so the builder must be a strict superset of it -
+# derive it and that holds by construction. Hand-maintaining a parallel apt list
+# does not: an earlier version of this stage omitted libncurses5, so freebasic's
+# prebuilt compiler could not find libtinfo.so.5 in the builder even though the
+# runtime image has it.
+#
+# Kept as a separate target because it roughly doubles the image and flips
+# /bin/sh to bash, which package build scripts assume and the runtime image
+# deliberately does not do.
+FROM runtime AS builder
 
-ENV DEBIAN_FRONTEND=noninteractive
-
-RUN printf '%s\n' \
-        'deb http://archive.debian.org/debian buster main' \
-        'deb http://archive.debian.org/debian-security buster/updates main' \
-        > /etc/apt/sources.list && \
-    rm -f /etc/apt/sources.list.d/*.list && \
-    echo 'Acquire::Check-Valid-Until "false";' \
-        > /etc/apt/apt.conf.d/99no-check-valid-until
-
-RUN apt-get update && apt-get install -y unzip autoconf build-essential libssl-dev \
-        pkg-config zlib1g-dev libargon2-dev libsodium-dev libcurl4-openssl-dev \
-        sqlite3 libsqlite3-dev libonig-dev libxml2 libxml2-dev bc curl git \
-        linux-headers-amd64 perl xz-utils python3 python3-pip gnupg jq zlib1g-dev \
-        cmake extra-cmake-modules gcc binutils bash coreutils \
-        util-linux findutils grep libncurses5-dev libncursesw5-dev \
-        libgmp-dev libmpfr-dev libffi-dev gfortran rename procps locales \
-        libreadline-dev libblas-dev liblapack-dev libpcre3-dev libarpack2-dev \
-        libfftw3-dev libglpk-dev libqhull-dev libqrupdate-dev libsuitesparse-dev \
-        libsundials-dev libbz2-dev liblzma-dev libpcre2-dev gperf bison flex \
-        g++ gawk zip libzstd-dev zstd libcap-dev libseccomp-dev ca-certificates && \
-        ln -sf /bin/bash /bin/sh && \
-        rm -rf /var/lib/apt/lists/*
-
-RUN useradd -M piston
-COPY --from=bun /usr/local/bin/bun /usr/local/bin/bun
-COPY --from=isolate /usr/local/bin/isolate /usr/local/bin
-COPY --from=isolate /usr/local/etc/isolate /usr/local/etc/isolate
-
-RUN sed -i '/en_US.UTF-8/s/^# //g' /etc/locale.gen && locale-gen
-
-WORKDIR /piston_api
-COPY ["api/package.json", "api/bun.lock", "./"]
-RUN bun install --frozen-lockfile --production
-COPY ./api/src ./src
-COPY ./packages ./packages
+RUN apt-get update && apt-get install -y \
+        autoconf automake libtool pkg-config cmake extra-cmake-modules \
+        bison flex gperf gawk perl python3-pip \
+        curl git jq bc zip xz-utils \
+        gfortran g++ linux-headers-amd64 \
+        libssl-dev zlib1g-dev libbz2-dev liblzma-dev libffi-dev \
+        libsqlite3-dev libreadline-dev libncurses5-dev libncursesw5-dev \
+        libgmp-dev libmpfr-dev libxml2-dev libonig-dev libcurl4-openssl-dev \
+        libargon2-dev libsodium-dev libzstd-dev sqlite3 && \
+    # Every package build script is written for bash, not dash.
+    ln -sf /bin/bash /bin/sh && \
+    rm -rf /var/lib/apt/lists/*
 
 ENV PISTON_ALLOW_SOURCE_BUILDS=true
-
-CMD ["/piston_api/src/docker-entrypoint.sh"]
-EXPOSE 2000/tcp
