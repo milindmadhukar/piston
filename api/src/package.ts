@@ -215,17 +215,47 @@ export default class Package {
         log(`Extracting into ${path.relative(this.install_path, into) || '.'}`);
 
         if (source.format === 'zip') {
+            // unzip has no --strip-components, so it is done by hand rather
+            // than silently ignored: `strip` has to mean the same thing for
+            // every format, or a manifest cannot be written from the URL alone.
+            const target = source.strip
+                ? path.join(this.install_path, '.unzip')
+                : into;
+            await fs.mkdir(target, { recursive: true });
+
             const result = await run('unzip', [
                 '-q',
                 '-o',
                 archive,
                 '-d',
-                into,
+                target,
             ]);
             if (result.code !== 0) {
                 throw new Error(
                     `Failed to extract archive: ${result.stderr.trim()}`
                 );
+            }
+
+            if (source.strip) {
+                let inner = target;
+                for (let level = 0; level < source.strip; level++) {
+                    const entries = await fs.readdir(inner);
+                    const only = entries[0];
+                    if (entries.length !== 1 || only === undefined) {
+                        throw new Error(
+                            `Cannot strip ${source.strip} level(s): ` +
+                                `${inner} holds ${entries.length} entries`
+                        );
+                    }
+                    inner = path.join(inner, only);
+                }
+                for (const entry of await fs.readdir(inner)) {
+                    await fs.rename(
+                        path.join(inner, entry),
+                        path.join(into, entry)
+                    );
+                }
+                await fs.rm(target, { recursive: true, force: true });
             }
             return;
         }
