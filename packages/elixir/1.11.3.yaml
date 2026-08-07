@@ -15,7 +15,6 @@ build: |
     rm erlang.tar.gz
 
     export ERL_TOP=$(pwd)
-    ./configure --prefix "$PREFIX"
     make -j$(nproc)
     make install -j$(nproc)
 
@@ -36,7 +35,6 @@ build: |
     tar xzf elixir.tar.gz --strip-components=1
     rm elixir.tar.gz
 
-    ./configure --prefix "$PREFIX"
     make -j$(nproc)
 
     cd ..
