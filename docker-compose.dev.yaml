@@ -1,8 +1,15 @@
 version: '3.2'
 
 services:
+    # The default runtime image. Packages whose manifest declares a prebuilt
+    # archive install straight from upstream, so most development needs nothing
+    # else running.
     api:
-        build: api
+        build:
+            context: .
+            dockerfile: api/Dockerfile
+            # Without this the builder stage, being last, is what gets tagged.
+            target: runtime
         container_name: piston_api
         privileged: true
         restart: always
@@ -10,15 +17,22 @@ services:
             - 2000:2000
         volumes:
             - ./data/piston/packages:/piston/packages
-        environment:
-            # Defaults to the local repo service for package development. Point
-            # it at a published index to install prebuilt runtimes instead:
-            #   PISTON_REPO_URL=https://github.com/engineer-man/piston/releases/download/pkgs/index docker compose -f docker-compose.dev.yaml up -d api
-            - PISTON_REPO_URL=${PISTON_REPO_URL:-http://repo:8000/index}
 
-    repo: # Local testing of packages
-        build: repo
-        container_name: piston_repo
-        command: ['--no-build'] # Don't build anything
+    # The same API plus a toolchain, so it builds a manifest's `build` script
+    # itself rather than fetching an archive from the index. Use this when
+    # working on a package that compiles from source:
+    #   docker compose -f docker-compose.dev.yaml up -d builder
+    #   curl -XPOST localhost:2001/api/v2/operations \
+    #     -d '{"kind":"install","language":"bash","version":"5.2.0"}'
+    builder:
+        profiles: [builder]
+        build:
+            context: .
+            dockerfile: api/Dockerfile
+            target: builder
+        container_name: piston_builder
+        privileged: true
+        ports:
+            - 2001:2000
         volumes:
-            - .:/piston
+            - ./data/piston-builder/packages:/piston/packages

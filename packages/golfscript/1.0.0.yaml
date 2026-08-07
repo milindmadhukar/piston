@@ -1,0 +1,22 @@
+language: golfscript
+version: '1.0.0'
+aliases: [golfscript]
+build: |
+    # golfscript was implemented as a Ruby script originally
+    source ../../ruby/2.5.1/build.sh
+
+    curl "http://www.golfscript.com/golfscript/golfscript.rb" -o bin/golfscript.rb
+
+    # using the shebang to run it with the right Ruby
+    sed -i "s|/usr/bin/|$PWD/bin/|g" bin/golfscript.rb
+    chmod +x bin/golfscript.rb
+env:
+    PATH: '{pkgdir}/bin:{PATH}'
+run: |
+    # golfscript only takes code file and stdin
+    golfscript.rb "$1"
+test:
+    language: golfscript
+    expect: OK
+    source: |
+        "OK"

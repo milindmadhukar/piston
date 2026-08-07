@@ -1,0 +1,20 @@
+language: deno
+version: '1.32.3'
+provides:
+    - language: typescript
+      aliases: [deno, deno-ts]
+    - language: javascript
+      aliases: [deno-js]
+glibc: '2.18'
+sources:
+    - url: https://github.com/denoland/deno/releases/download/v1.32.3/deno-x86_64-unknown-linux-gnu.zip
+      sha256: 92d7dd4eb00aa7538d323c8d2bf8526b676c13b2cd8bd06a539affac6b92f7eb
+env:
+    PATH: '{pkgdir}:{PATH}'
+run: |
+    DENO_DIR=$PWD NO_COLOR=true deno run $@
+test:
+    expect: OK
+    source: |
+        console.log('OK');
+    language: deno

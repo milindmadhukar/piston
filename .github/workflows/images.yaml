@@ -1,0 +1,153 @@
+name: Publish images
+
+# Tagging scheme:
+#   push to main   -> :edge and :sha-<sha>
+#   push tag vX.Y.Z -> :X.Y.Z, :X.Y, :X and :latest
+#   pull request   -> built, never pushed
+#
+# :latest tracks the newest semver tag, not the tip of main, so it stays a safe
+# pin for consumers. Use :edge to follow main.
+
+on:
+    push:
+        branches:
+            - main
+        tags:
+            - 'v*.*.*'
+    pull_request:
+    workflow_dispatch:
+
+concurrency:
+    group: images-${{ github.ref }}
+    cancel-in-progress: true
+
+permissions:
+    contents: read
+    packages: write
+
+jobs:
+    changes:
+        name: Detect changes
+        runs-on: ubuntu-latest
+        # A tag push is a release: both images are rebuilt regardless of what the
+        # tagged commit touched. Note `paths:` cannot do this job - GitHub ANDs it
+        # with `tags:`, so a release whose commit misses api/** would be skipped.
+        if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref_type == 'branch')
+        outputs:
+            api: ${{ steps.filter.outputs.api }}
+        steps:
+            - uses: actions/checkout@v4
+            - uses: dorny/paths-filter@v3
+              id: filter
+              with:
+                  filters: |
+                      api:
+                        - 'api/**'
+                        - 'packages/**'
+                        - '.github/workflows/images.yaml'
+
+    api:
+        name: API image
+        needs: changes
+        if: |
+            always() && needs.changes.result != 'failure' && (
+              needs.changes.outputs.api == 'true'
+              || github.ref_type == 'tag'
+              || github.event_name == 'workflow_dispatch'
+            )
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+
+            - uses: docker/metadata-action@v5
+              id: meta
+              with:
+                  images: ghcr.io/${{ github.repository }}
+                  # latest=auto is the default: :latest moves on semver tags only.
+                  tags: |
+                      type=edge,branch=main
+                      type=semver,pattern={{version}}
+                      type=semver,pattern={{major}}.{{minor}}
+                      type=semver,pattern={{major}}
+                      type=ref,event=pr
+                      type=sha
+
+            - uses: docker/setup-buildx-action@v3
+
+            - uses: docker/login-action@v3
+              if: github.event_name != 'pull_request'
+              with:
+                  registry: ghcr.io
+                  username: ${{ github.actor }}
+                  password: ${{ secrets.GITHUB_TOKEN }}
+
+            - uses: docker/build-push-action@v5
+              with:
+                  # The repository root, so packages/ manifests are baked in.
+                  context: .
+                  file: api/Dockerfile
+                  # The builder stage is last in the file; without an explicit
+                  # target it, not the runtime image, is what gets published.
+                  target: runtime
+                  # Every language package is a prebuilt x86_64 binary, so an
+                  # arm64 image could not run a single runtime.
+                  platforms: linux/amd64
+                  push: ${{ github.event_name != 'pull_request' }}
+                  pull: true
+                  tags: ${{ steps.meta.outputs.tags }}
+                  labels: ${{ steps.meta.outputs.labels }}
+                  cache-from: type=gha,scope=api
+                  cache-to: type=gha,mode=max,scope=api
+                  provenance: false
+
+    builder:
+        # The same API plus a toolchain, so it can run a manifest's `build`
+        # script itself instead of fetching an archive CI produced. This is what
+        # package-push.yaml runs to produce those archives, and what a
+        # self-hoster runs to skip CI entirely.
+        name: Builder image
+        needs: changes
+        if: |
+            always() && needs.changes.result != 'failure' && (
+              needs.changes.outputs.api == 'true'
+              || github.ref_type == 'tag'
+              || github.event_name == 'workflow_dispatch'
+            )
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+
+            - uses: docker/metadata-action@v5
+              id: meta
+              with:
+                  images: ghcr.io/${{ github.repository }}/builder
+                  tags: |
+                      type=edge,branch=main
+                      type=semver,pattern={{version}}
+                      type=semver,pattern={{major}}.{{minor}}
+                      type=semver,pattern={{major}}
+                      type=ref,event=pr
+                      type=sha
+
+            - uses: docker/setup-buildx-action@v3
+
+            - uses: docker/login-action@v3
+              if: github.event_name != 'pull_request'
+              with:
+                  registry: ghcr.io
+                  username: ${{ github.actor }}
+                  password: ${{ secrets.GITHUB_TOKEN }}
+
+            - uses: docker/build-push-action@v5
+              with:
+                  context: .
+                  file: api/Dockerfile
+                  target: builder
+                  platforms: linux/amd64
+                  push: ${{ github.event_name != 'pull_request' }}
+                  pull: true
+                  tags: ${{ steps.meta.outputs.tags }}
+                  labels: ${{ steps.meta.outputs.labels }}
+                  cache-from: type=gha,scope=builder
+                  cache-to: type=gha,mode=max,scope=builder
+                  provenance: false

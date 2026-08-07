@@ -1,0 +1,30 @@
+language: matl
+version: '22.7.4'
+aliases: []
+build: |
+    # build octave as dependency
+    source ../../octave/6.2.0/build.sh
+
+    # curl MATL 22.7.4
+    curl -L "https://github.com/lmendo/MATL/archive/refs/tags/22.7.4.tar.gz" -o MATL.tar.xz
+    tar xf MATL.tar.xz --strip-components=1
+    rm MATL.tar.xz
+env:
+    PATH: '{pkgdir}/bin:{PATH}'
+    MATL_PATH: '{pkgdir}'
+run: |
+    # get file as first argument
+    file="$1"
+
+    # remove the file from $@
+    shift
+
+    # use the rest of the arguments as stdin
+    stdin=`printf "%s\n" "$@"`
+
+    # pass stdin into octave which will run MATL
+    echo "$stdin" | octave -W -p "$MATL_PATH" --eval "matl -of '$file'"
+test:
+    language: matl
+    expect: OK
+    source: "'OK'"

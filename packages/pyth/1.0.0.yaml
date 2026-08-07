@@ -1,0 +1,18 @@
+language: pyth
+version: '1.0.0'
+aliases: [pyth]
+build: |
+    # Pyth install
+    source ../../python/3.9.1/build.sh
+
+    git clone -q "https://github.com/isaacg1/pyth.git" pyth
+env:
+    PATH: '{pkgdir}/bin:{PATH}'
+    PYTH_PATH: '{pkgdir}/pyth'
+run: |
+    # pyth only takes filename and stdin
+    python3 "$PYTH_PATH"/pyth.py "$1"
+test:
+    language: pyth
+    expect: OK
+    source: '"OK'

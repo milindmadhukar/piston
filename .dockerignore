@@ -1,0 +1,21 @@
+# The API build context is the repository root so that packages/ manifests can
+# be baked into the image. Everything else stays out.
+.git
+node_modules
+*/node_modules
+data
+var
+cli
+builder
+repo
+docs
+tests
+.github
+
+# Built tarballs, and any package tree left behind by a local `piston build-pkg`.
+# Note the exception below: docker normalises the trailing slash away, so
+# `packages/*/*` also matches `packages/<lang>/<version>.yaml` - the manifests
+# have to be added back explicitly.
+packages/*.pkg.tar.gz
+packages/*/*/
+!packages/*/*.yaml

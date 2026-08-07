@@ -8,6 +8,8 @@ import globals from './globals.ts';
 import { create } from './logger.ts';
 import { error_message } from './errors.ts';
 import { load_package } from './runtime.ts';
+import { load_all_manifests } from './package.ts';
+import { get_operation } from './operations.ts';
 import {
     empty_response,
     json_response,
@@ -16,7 +18,12 @@ import {
     handle_list_packages,
     handle_install_package,
     handle_uninstall_package,
+    handle_start_operation,
+    handle_list_operations,
+    handle_get_operation,
+    handle_operation_log,
     new_connection_data,
+    new_operation_connection_data,
     websocket_handlers,
     type ConnectionData,
 } from './api/v2.ts';
@@ -47,6 +54,18 @@ Object.values(globals.data_directories).forEach(dir => {
         }
     }
 });
+
+// Manifests are baked into the image and are the whitelist of what can be
+// installed at all, so a broken one is fatal at boot rather than at request
+// time.
+logger.info('Loading package manifests');
+try {
+    const count = await load_all_manifests();
+    logger.info(`Loaded ${count} package manifests`);
+} catch (e) {
+    logger.error('Failed to load package manifests:', error_message(e));
+    process.exit(1);
+}
 
 logger.info('Loading packages');
 const pkgdir = path.join(
@@ -174,6 +193,47 @@ const server = Bun.serve<ConnectionData>({
             HEAD: () => handle_list_packages(),
             POST: with_json_body(handle_install_package),
             DELETE: with_json_body(handle_uninstall_package),
+        },
+
+        // Async install/uninstall. Additive: POST /api/v2/packages keeps its
+        // synchronous behaviour untouched. Mounted at /api/v2/operations rather
+        // than under /api/v2/packages so it cannot shadow that frozen route.
+        '/api/v2/operations': {
+            GET: () => handle_list_operations(),
+            HEAD: () => handle_list_operations(),
+            POST: with_json_body(handle_start_operation),
+        },
+
+        '/api/v2/operations/:id': {
+            GET: (req: Bun.BunRequest<'/api/v2/operations/:id'>) =>
+                handle_get_operation(req.params.id),
+            HEAD: (req: Bun.BunRequest<'/api/v2/operations/:id'>) =>
+                handle_get_operation(req.params.id),
+        },
+
+        '/api/v2/operations/:id/log': {
+            GET: (req: Bun.BunRequest<'/api/v2/operations/:id/log'>) =>
+                handle_operation_log(req.params.id),
+            HEAD: (req: Bun.BunRequest<'/api/v2/operations/:id/log'>) =>
+                handle_operation_log(req.params.id),
+        },
+
+        '/api/v2/operations/:id/connect': (
+            req: Bun.BunRequest<'/api/v2/operations/:id/connect'>,
+            server: Bun.Server<ConnectionData>
+        ) => {
+            const operation = get_operation(req.params.id);
+            if (!operation) {
+                return json_response(404, {
+                    message: `Unknown operation ${req.params.id}`,
+                });
+            }
+            const data: ConnectionData =
+                new_operation_connection_data(operation);
+            if (server.upgrade(req, { data })) {
+                return new Response(null, { status: 101 });
+            }
+            return not_found();
         },
 
         '/api/v2/connect': (

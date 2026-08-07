@@ -1,0 +1,25 @@
+language: lua
+version: '5.4.4'
+aliases: []
+build: |
+    # Put instructions to build your package in here
+    curl -R -O -L http://www.lua.org/ftp/lua-5.4.4.tar.gz
+    tar zxf lua-5.4.4.tar.gz
+    rm lua-5.4.4.tar.gz
+
+    cd lua-5.4.4
+    # Building Lua
+    make linux
+    # To check that Lua has been built correctly
+    make test
+    # Installing Lua
+    make linux install
+env:
+    PATH: '{pkgdir}/lua-5.4.4/src:{PATH}'
+run: |
+    # Put instructions to run the runtime
+    lua "$@"
+test:
+    language: lua
+    expect: OK
+    source: print("OK")

@@ -233,3 +233,97 @@ Content-Type: application/json
   "version": "5.1.0"
 }
 ```
+
+## Operations
+
+`POST /api/v2/packages` is synchronous: it returns when the package is installed. That
+is fine for a package that is a tarball fetch, but a package that compiles from source
+can take an hour. These endpoints run the same work in the background instead.
+
+They are additions. `POST /api/v2/packages` is unchanged.
+
+### `POST /api/v2/operations`
+
+Starts an install or uninstall and returns immediately.
+
+#### Request
+
+- `kind`: `install` or `uninstall`. Anything other than `uninstall` means install.
+- `language`: Name of package from [package list](#get-apiv2packages)
+- `version`: SemVer version selector for package
+
+#### Response
+
+`202 Accepted`, with:
+
+- `id`: Identifier for this operation
+- `kind`, `language`, `version`: As resolved
+- `state`: One of `running`, `succeeded`, `failed`
+- `started`: Unix milliseconds
+- `finished` (_optional_): Unix milliseconds, once settled
+- `error` (_optional_): Failure message, when `state` is `failed`
+
+A `409` is returned when an operation for the same package is already running, and a
+`404` when the package does not exist.
+
+#### Example
+
+```json
+POST /api/v2/operations
+Content-Type: application/json
+
+{
+  "kind": "install",
+  "language": "gcc",
+  "version": "15.3.0"
+}
+```
+
+```json
+HTTP/1.1 202 Accepted
+Content-Type: application/json
+
+{
+  "id": "09a478b7-f1be-4e9d-ada5-e85d79c87615",
+  "kind": "install",
+  "language": "gcc",
+  "version": "15.3.0",
+  "state": "running",
+  "started": 1786116772596
+}
+```
+
+### `GET /api/v2/operations`
+
+Lists recent operations, newest first. Completed ones are retained for a while and then
+dropped; an operation is a record of work in flight, not durable state.
+
+### `GET /api/v2/operations/<id>`
+
+Returns one operation in the shape above, or a `404`.
+
+### `GET /api/v2/operations/<id>/log`
+
+Returns the operation's log as `text/plain`. If the log has outgrown its buffer the
+first line records how many earlier lines were dropped.
+
+```
+Installing go-1.26.5
+Fetching https://dl.google.com/go/go1.26.5.linux-amd64.tar.gz
+Fetched 66879095 bytes, sha256 ok
+Extracting into .
+Writing package files
+Registering runtime
+Installed go-1.26.5
+```
+
+### `/api/v2/operations/<id>/connect`
+
+A WebSocket that streams the log live. On connect the log so far is replayed, so a
+client that attaches late still sees everything. Messages are:
+
+- `{"type": "log", "data": "<one or more lines>"}`
+- `{"type": "state", "state": "succeeded"}` or `{"type": "state", "state": "failed", "error": "..."}`
+
+The socket is closed with `1000` once the operation settles. It is read-only — anything
+the client sends is ignored.

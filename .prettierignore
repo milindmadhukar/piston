@@ -1,12 +1,10 @@
 node_modules
 data/
 api/_piston
-repo/build
-packages/*/*/*
+
+# Package manifests are formatted; anything else under packages/ is build
+# output - an extracted runtime tree left by `piston build-pkg`, or a built
+# archive.
+packages/*/*/
 packages/*.pkg.tar.gz
-!packages/*/*/metadata.json
-!packages/*/*/build.sh
-!packages/*/*/environment
-!packages/*/*/run
-!packages/*/*/compile
-!packages/*/*/test.*
+packages/index

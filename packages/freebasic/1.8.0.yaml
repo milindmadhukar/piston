@@ -1,0 +1,20 @@
+language: freebasic
+version: '1.8.0'
+aliases: [bas, fbc, basic, qbasic, quickbasic]
+build: |
+    curl -L "https://sourceforge.net/projects/fbc/files/FreeBASIC-1.08.0/Binaries-Linux/FreeBASIC-1.08.0-linux-x86_64.tar.gz/download" -o freebasic.tar.gz
+    tar xf freebasic.tar.gz --strip-components=1
+    rm freebasic.tar.gz
+env:
+    PATH: '{pkgdir}/bin:{PATH}'
+compile: |
+    # Compile bas files
+    fbc -lang qb -b "$@" -x out
+run: |
+    # Run output file from compile with arguments
+    shift
+    ./out "$@"
+test:
+    language: bas
+    expect: OK
+    source: PRINT "OK"

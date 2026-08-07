@@ -1,0 +1,17 @@
+language: swift
+version: '5.3.3'
+aliases: [swift]
+build: |
+    # Binary install
+    curl -L "https://swift.org/builds/swift-5.3.3-release/ubuntu1804/swift-5.3.3-RELEASE/swift-5.3.3-RELEASE-ubuntu18.04.tar.gz" -o swift.tar.gz
+    tar xzf swift.tar.gz --strip-components=2
+    rm swift.tar.gz
+env:
+    PATH: '{pkgdir}/bin:{PATH}'
+run: |
+    # Setting clang cache to current dir to avoid permission error on /tmp
+    swift -module-cache-path . "$@"
+test:
+    language: swift
+    expect: OK
+    source: print("OK")

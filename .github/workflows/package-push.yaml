@@ -1,73 +1,166 @@
-name: 'Package Pushed'
+name: 'Build and publish packages'
+
+# Only packages that genuinely need a toolchain are built and published here.
+# A manifest that declares a prebuilt upstream archive needs nothing from CI at
+# all - the engine fetches and verifies it directly - so adding, say, a new Go
+# release is a one-file pull request and no build.
+#
+# The `pkgs` release holds the built archives plus the index that
+# PISTON_REPO_URL points at.
 
 on:
     push:
-        branches:
-            - main
-            - v3
+        branches: [main]
         paths:
             - packages/**
+            - .github/scripts/**
+            - .github/workflows/package-push.yaml
+    workflow_dispatch:
+        inputs:
+            packages:
+                description: '"built" (all needing a source build), "all", or a space-separated list of slugs'
+                default: built
+                required: true
+
+permissions:
+    contents: write
 
 jobs:
-    build-pkg:
-        name: Build package
+    discover:
+        name: Select packages
         runs-on: ubuntu-latest
-        permissions:
-            contents: write
+        outputs:
+            slugs: ${{ steps.select.outputs.slugs }}
+            any: ${{ steps.select.outputs.any }}
         steps:
-            - name: Checkout
-              uses: actions/checkout@v4
-
-            - name: Get list of changed files
-              uses: lots0logs/gh-action-get-changed-files@2.1.4
+            - uses: actions/checkout@v4
               with:
-                  token: ${{ secrets.GITHUB_TOKEN }}
+                  fetch-depth: 0
 
-            - name: Build Packages
+            - name: Select packages
+              id: select
+              env:
+                  EVENT: ${{ github.event_name }}
+                  INPUT: ${{ inputs.packages }}
+                  BEFORE: ${{ github.event.before }}
+                  SHA: ${{ github.sha }}
               run: |
-                  PACKAGES=$(jq '.[]' -r ${HOME}/files*.json | awk -F/ '$1~/packages/ && $2 && $3{ print $2 "-" $3 }' | sort -u)
-                  echo "Packages: $PACKAGES"
-                  docker build -t repo-builder repo
-                  docker run -v "${{ github.workspace }}:/piston" repo-builder --no-server $PACKAGES
-                  ls -la packages
+                  if [ "$EVENT" = "push" ]; then
+                    base="$BEFORE"
+                    # A new branch or a force push reports an all-zero (or empty)
+                    # "before" sha; fall back to the first parent of the commit.
+                    case "$base" in
+                      *[!0]*) ;;
+                      *) base="$SHA^" ;;
+                    esac
+                    changed=$(.github/scripts/changed-packages.sh diff "$base" "$SHA")
+                  else
+                    case "$INPUT" in
+                      built) changed=$(.github/scripts/changed-packages.sh built) ;;
+                      all)   changed=$(.github/scripts/changed-packages.sh all) ;;
+                      *)     changed=$(.github/scripts/changed-packages.sh explicit "$INPUT") ;;
+                    esac
+                  fi
 
-            - name: Upload Packages
-              uses: svenstaro/upload-release-action@v2
-              with:
-                  repo_token: ${{ secrets.GITHUB_TOKEN }}
-                  file: packages/*.pkg.tar.gz
-                  tag: pkgs
-                  overwrite: true
-                  file_glob: true
-    create-index:
-        name: Create Index
+                  # Whatever the selection, only build what actually needs building.
+                  buildable=$(.github/scripts/changed-packages.sh built)
+                  slugs=$(comm -12 <(echo "$changed" | sort -u) <(echo "$buildable" | sort -u))
+
+                  echo "Selected: $slugs"
+
+                  json=$(printf '%s\n' "$slugs" | jq -R . | jq -sc 'map(select(length > 0))')
+                  echo "slugs=$json" >> "$GITHUB_OUTPUT"
+                  if [ "$json" = "[]" ]; then
+                    echo "any=false" >> "$GITHUB_OUTPUT"
+                  else
+                    echo "any=true" >> "$GITHUB_OUTPUT"
+                  fi
+
+            - name: Ensure the pkgs release exists
+              # Otherwise parallel build jobs race to create it on first upload.
+              env:
+                  GH_TOKEN: ${{ github.token }}
+              run: |
+                  gh release view pkgs > /dev/null 2>&1 || \
+                    gh release create pkgs \
+                      --title 'Packages' \
+                      --notes 'Archives for packages that must be built from source, and the index PISTON_REPO_URL points at. Managed by .github/workflows/package-push.yaml.'
+
+    build:
+        name: ${{ matrix.slug }}
+        needs: discover
+        if: needs.discover.outputs.any == 'true'
         runs-on: ubuntu-latest
-        needs: build-pkg
-        permissions:
-            contents: write
+        # gcc and haskell are hours, not minutes.
+        timeout-minutes: 360
+        strategy:
+            # One bad build must not take the rest of the run down - a partly
+            # green run still refreshes the index below.
+            fail-fast: false
+            max-parallel: 4
+            matrix:
+                slug: ${{ fromJSON(needs.discover.outputs.slugs) }}
         steps:
-            - name: 'Download all release assets'
-              run: curl -s https://api.github.com/repos/${{ github.repository }}/releases/tags/pkgs | jq '.assets[].browser_download_url' -r | xargs -L 1 curl -sLO
-            - name: 'Generate index file'
-              run: |
-                  echo "" > index
-                  BASEURL=https://github.com/${{ github.repository }}/releases/download/pkgs/
-                  for pkg in *.pkg.tar.gz
-                  do
-                    PKGFILE=$(basename $pkg)
-                    PKGFILENAME=$(echo $PKGFILE | sed 's/\.pkg\.tar\.gz//g')
+            - uses: actions/checkout@v4
 
-                    PKGNAME=$(echo $PKGFILENAME | grep -oP '^\K.+(?=-)')
-                    PKGVERSION=$(echo $PKGFILENAME | grep -oP '^.+-\K.+')
-                    PKGCHECKSUM=$(sha256sum $PKGFILE | awk '{print $1}')
-                    echo "$PKGNAME,$PKGVERSION,$PKGCHECKSUM,$BASEURL$PKGFILE" >> index
-                    echo "Adding package $PKGNAME-$PKGVERSION"
+            - name: Build ${{ matrix.slug }}
+              run: .github/scripts/build-package.sh '${{ matrix.slug }}'
+
+            - name: Publish ${{ matrix.slug }}
+              env:
+                  GH_TOKEN: ${{ github.token }}
+              run: gh release upload pkgs 'packages/${{ matrix.slug }}.pkg.tar.gz' --clobber
+
+    index:
+        name: Regenerate index
+        needs: [discover, build]
+        # always(): a run where only some packages built must still republish the
+        # index with whatever did, which is what makes incremental fixing work.
+        if: always() && needs.discover.outputs.any == 'true' && needs.build.result != 'cancelled'
+        runs-on: ubuntu-latest
+        concurrency:
+            group: pkgs-index
+            cancel-in-progress: false
+        steps:
+            - name: Download every published archive
+              env:
+                  GH_TOKEN: ${{ github.token }}
+              run: |
+                  mkdir assets
+                  # Errors when nothing matches, which is the legitimate state of
+                  # a run where every build failed.
+                  gh release download pkgs \
+                    --repo '${{ github.repository }}' \
+                    --pattern '*.pkg.tar.gz' \
+                    --dir assets || echo 'no package archives published yet'
+
+            - name: Generate the index
+              run: |
+                  shopt -s nullglob
+                  BASEURL='https://github.com/${{ github.repository }}/releases/download/pkgs/'
+                  : > index
+                  for pkg in assets/*.pkg.tar.gz; do
+                    FILE=$(basename "$pkg")
+                    SLUG=${FILE%.pkg.tar.gz}
+                    # Split on the first dash: language names never contain one,
+                    # versions do (python-3.10.0-alpha.7).
+                    NAME=${SLUG%%-*}
+                    VERSION=${SLUG#*-}
+                    SUM=$(sha256sum "$pkg" | awk '{print $1}')
+
+                    echo "$NAME,$VERSION,$SUM,$BASEURL$FILE" >> index
+                    echo "Adding $NAME-$VERSION"
                   done
-            - name: Upload index
-              uses: svenstaro/upload-release-action@v2
-              with:
-                  repo_token: ${{ secrets.GITHUB_TOKEN }}
-                  file: index
-                  tag: pkgs
-                  overwrite: true
-                  file_glob: true
+                  echo "$(wc -l < index) archives in the index"
+
+            - name: Publish the index
+              env:
+                  GH_TOKEN: ${{ github.token }}
+              run: |
+                  # Never overwrite a good index with an empty one - that would
+                  # take every source-built runtime offline at once.
+                  if [ ! -s index ]; then
+                    echo '::error::refusing to publish an empty index'
+                    exit 1
+                  fi
+                  gh release upload pkgs index --clobber

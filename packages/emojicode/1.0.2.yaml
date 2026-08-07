@@ -1,0 +1,36 @@
+language: emojicode
+version: '1.0.2'
+aliases: [emojic]
+build: |
+    curl -L https://github.com/emojicode/emojicode/releases/download/v1.0-beta.2/Emojicode-1.0-beta.2-Linux-x86_64.tar.gz -o emoji.tar.gz
+    tar xzf emoji.tar.gz
+
+    mv Emojicode-1.0-beta.2-Linux-x86_64 emoji
+
+    rm emoji.tar.gz
+
+    cd emoji
+
+    ./install.sh
+
+
+    chmod +x emojicodec
+
+    cd ..
+env:
+    PATH: '{pkgdir}/bin:{PATH}'
+    EMOJI_PATH: '{pkgdir}/emoji'
+compile: |
+    "$EMOJI_PATH"/emojicodec -S "$EMOJI_PATH"/packages "$1" -o "bruh.exe"
+    chmod +x "bruh.exe"
+run: |
+    shift
+
+    ./"bruh.exe" "$@"
+test:
+    language: emojic
+    expect: OK
+    source: |
+        🏁 🍇
+          😀 🔤OK🔤❗️
+        🍉

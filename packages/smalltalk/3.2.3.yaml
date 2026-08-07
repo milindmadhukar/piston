@@ -1,0 +1,35 @@
+language: smalltalk
+version: '3.2.3'
+aliases: [st]
+build: |
+    set -e
+
+    curl -L https://ftp.gnu.org/gnu/smalltalk/smalltalk-3.2.3.tar.gz -o smalltalk-3.2.3.tar.gz
+    tar xzf smalltalk-3.2.3.tar.gz
+
+    rm smalltalk-3.2.3.tar.gz
+
+    cd smalltalk-3.2.3
+
+    ./configure
+    rm libc.la
+
+    make
+    make install
+
+    chmod +x gst
+    cd ..
+env:
+    PATH: '{pkgdir}/bin:{PATH}'
+    SMALLTALK_PATH: '{pkgdir}/smalltalk-3.2.3'
+run: |
+    code_file=`pwd`/"$1"
+    shift
+
+    cd $SMALLTALK_PATH
+    $SMALLTALK_PATH/gst "$code_file" -a "$@"
+test:
+    language: st
+    expect: OK
+    source: |
+        'OK' display

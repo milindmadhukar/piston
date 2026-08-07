@@ -1,0 +1,25 @@
+language: dart
+version: '2.19.6'
+aliases: []
+build: |
+    curl -L "https://storage.googleapis.com/dart-archive/channels/stable/release/2.19.6/sdk/dartsdk-linux-x64-release.zip" -o dart.zip
+
+    unzip dart.zip
+    rm dart.zip
+
+    cp -r dart-sdk/* .
+    rm -rf dart-sdk
+
+    chmod -R +rx bin
+env:
+    PATH: '{pkgdir}/bin:{PATH}'
+run: |
+    # Put instructions to run the runtime
+    dart run "$@"
+test:
+    language: dart
+    expect: OK
+    source: |
+        void main() {
+          print('OK');
+        }

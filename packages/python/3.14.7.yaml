@@ -1,0 +1,29 @@
+language: python
+version: '3.14.7'
+aliases: [py, py3, python3, python3.14]
+glibc: '2.17'
+sources:
+    - url: https://github.com/astral-sh/python-build-standalone/releases/download/20260805/cpython-3.14.7+20260805-x86_64-unknown-linux-gnu-install_only.tar.gz
+      sha256: 64ebb7e4ef74b03e8038ba07209ab1fce62fcbe4afafbbce5a27216fbffde5ff
+      strip: 1
+post_install: |
+    # python-build-standalone bundles pip but not the scientific stack, so this
+    # stays a built package. It is still a big win over the old manifest, which
+    # compiled the whole of CPython first.
+    bin/pip3 install --no-cache-dir numpy scipy pandas pycryptodome whoosh \
+        bcrypt passlib sympy xxhash base58 cryptography PyNaCl
+env:
+    PATH: '{pkgdir}/bin:{PATH}'
+run: |
+    python3.14 "$@"
+test:
+    expect: OK
+    source: |
+        working = True
+
+        match working:
+            case True:
+                print("OK")
+            case False:
+                print()
+    language: py

@@ -1,0 +1,17 @@
+language: samarium
+version: '0.3.1'
+aliases: [sm]
+build: |
+    source ../../python/3.10.0/build.sh
+    bin/pip3 install https://github.com/samarium-lang/Samarium/archive/refs/tags/0.3.1.zip
+env:
+    PATH: '{pkgdir}/bin:{PATH}'
+run: |
+    python3 -m samarium $1
+test:
+    language: sm
+    expect: OK
+    source: |
+        => * {
+            "OK"!;
+        }

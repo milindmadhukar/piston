@@ -1,0 +1,27 @@
+language: forte
+version: '1.0.0'
+aliases: [forter]
+build: |
+    # the forter interpreter requries ruby
+    source ../../ruby/3.0.1/build.sh
+
+    mkdir -p build
+
+    git clone -q "https://github.com/judofyr/forter" build/forter
+    cd build/forter
+
+    mv bin/* ../../bin/
+    mv lib/* ../../lib/
+
+    cd ../../
+    rm -rf build
+env:
+    PATH: '{pkgdir}/bin:{PATH}'
+run: |
+    forter "$@"
+test:
+    language: forte
+    expect: OK
+    source: |
+        1 PRINT "OK"
+        2 END

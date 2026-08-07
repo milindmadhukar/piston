@@ -1,0 +1,72 @@
+language: nasm
+version: '2.15.5'
+provides:
+    - language: nasm
+      aliases: [asm, nasm32]
+    - language: nasm64
+      aliases: [asm64]
+build: |
+    # Put instructions to build your package in here
+    PREFIX=$(realpath $(dirname $0))
+
+    mkdir -p build
+
+    cd build
+
+    curl -L "https://www.nasm.us/pub/nasm/releasebuilds/2.15.05/nasm-2.15.05.tar.gz" -o nasm.tar.gz
+
+    tar xzf nasm.tar.gz --strip-components=1
+
+    # === autoconf based ===
+    ./configure --prefix "$PREFIX"
+
+    make -j$(nproc)
+    make install -j$(nproc)
+    cd ../
+    rm -rf build
+env:
+    PATH: '{pkgdir}/bin:{PATH}'
+compile: |
+    # Put instructions to compile source code, remove this file if the language does not require this stage
+
+
+    case "${PISTON_LANGUAGE}" in
+        nasm)
+            nasm -f elf32 -o binary.o "$@"
+            ld -m elf_i386 binary.o -o binary
+            ;;
+        nasm64)
+            nasm -f elf64 -o binary.o "$@"
+            ld -m elf_x86_64 binary.o -o binary
+            ;;
+        *)
+            echo "How did you get here? (${PISTON_LANGUAGE})"
+            exit 1
+            ;;
+    esac
+
+    chmod +x ./binary
+run: |
+    # Put instructions to run the runtime
+    shift
+    ./binary "$@"
+test:
+    language: nasm
+    expect: OK
+    source: |
+        SECTION .DATA
+        good:     db 'OK',10
+        txtlen:  equ $-good
+
+        SECTION .TEXT
+        GLOBAL _start
+
+        _start:
+        mov eax,4
+        mov ebx,1
+        mov ecx,good
+        mov edx,txtlen
+        int 80h
+        mov eax,1
+        mov ebx,0
+        int 80h

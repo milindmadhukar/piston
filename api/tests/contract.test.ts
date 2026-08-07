@@ -38,13 +38,14 @@ beforeAll(async () => {
 const ok_file = { name: 'main.sh', content: 'echo ok' };
 const base_req = { language: LANG, version: VERSION, files: [ok_file] };
 
-async function post(
+async function request(
+    method: string,
     path: string,
     body: unknown,
     headers?: Record<string, string>
 ) {
     const res = await fetch(BASE + path, {
-        method: 'POST',
+        method,
         headers: headers ?? { 'Content-Type': 'application/json' },
         body: typeof body === 'string' ? body : JSON.stringify(body),
     });
@@ -55,6 +56,14 @@ async function post(
         body: text.length ? JSON.parse(text) : null,
         text,
     };
+}
+
+async function post(
+    path: string,
+    body: unknown,
+    headers?: Record<string, string>
+) {
+    return request('POST', path, body, headers);
 }
 
 async function execute(body: unknown) {
@@ -388,6 +397,132 @@ describe('runtimes and packages', () => {
         expect(bash).toBeDefined();
         expect(bash?.version).toBe(VERSION);
         expect(Array.isArray(bash?.aliases)).toBe(true);
+    });
+
+    // These hold whether or not the package index is reachable: they never get
+    // as far as resolving a package.
+    test('POST /packages without a content-type is a 415', async () => {
+        const res = await post('/api/v2/packages', '{}', {});
+        expect(res.status).toBe(415);
+        expect(res.body).toEqual({
+            message: 'requests must be of type application/json',
+        });
+    });
+
+    test('POST /packages with malformed json is a 400 carrying a stack', async () => {
+        const res = await post('/api/v2/packages', '{not valid json');
+        expect(res.status).toBe(400);
+        expect(typeof res.body.stack).toBe('string');
+    });
+
+    test('DELETE /packages without a content-type is a 415', async () => {
+        const res = await request('DELETE', '/api/v2/packages', '{}', {});
+        expect(res.status).toBe(415);
+    });
+
+    test('an unsupported method on /packages falls through to 404', async () => {
+        const res = await request('PATCH', '/api/v2/packages', {});
+        expect(res.status).toBe(404);
+        expect(res.body).toEqual({ message: 'Not Found' });
+    });
+});
+
+/**
+ * The rest of the packages surface needs a reachable index - without one every
+ * request resolves to a 500 instead of the documented shape. Skipped rather
+ * than failed so the suite still runs against an instance with no index.
+ */
+const packages_probe = await fetch(BASE + '/api/v2/packages')
+    .then(async r => r.ok && Array.isArray(await r.json()))
+    .catch(() => false);
+
+describe.skipIf(!packages_probe)('packages index', () => {
+    test('GET /packages lists packages with exactly the documented fields', async () => {
+        const res = await fetch(BASE + '/api/v2/packages');
+        expect(res.status).toBe(200);
+        expect(res.headers.get('content-type')).toBe(
+            'application/json; charset=utf-8'
+        );
+
+        const body = (await res.json()) as Record<string, unknown>[];
+        expect(Array.isArray(body)).toBe(true);
+        expect(body.length).toBeGreaterThan(0);
+
+        for (const entry of body) {
+            // The exact key set is the contract - no more, no less.
+            expect(Object.keys(entry).sort()).toEqual([
+                'installed',
+                'language',
+                'language_version',
+            ]);
+            expect(typeof entry.language).toBe('string');
+            expect(typeof entry.language_version).toBe('string');
+            expect(typeof entry.installed).toBe('boolean');
+        }
+    });
+
+    test('HEAD /packages returns the headers with no body', async () => {
+        const res = await fetch(BASE + '/api/v2/packages', { method: 'HEAD' });
+        expect(res.status).toBe(200);
+        expect(res.headers.get('content-type')).toBe(
+            'application/json; charset=utf-8'
+        );
+        expect(await res.text()).toBe('');
+    });
+
+    test('installing an unknown package is a 404 naming it', async () => {
+        const res = await post('/api/v2/packages', {
+            language: 'definitely-not-a-language',
+            version: '1.0.0',
+        });
+        expect(res.status).toBe(404);
+        expect(res.body).toEqual({
+            message:
+                'Requested package definitely-not-a-language-1.0.0 does not exist',
+        });
+    });
+
+    test('uninstalling an unknown package is the same 404', async () => {
+        const res = await request('DELETE', '/api/v2/packages', {
+            language: 'definitely-not-a-language',
+            version: '1.0.0',
+        });
+        expect(res.status).toBe(404);
+        expect(res.body).toEqual({
+            message:
+                'Requested package definitely-not-a-language-1.0.0 does not exist',
+        });
+    });
+
+    test('a request with no language or version is a 404 naming undefined', async () => {
+        // The message interpolates the raw body values, so both read
+        // "undefined". Pinned because clients may match on it.
+        const res = await post('/api/v2/packages', {});
+        expect(res.status).toBe(404);
+        expect(res.body).toEqual({
+            message: 'Requested package undefined-undefined does not exist',
+        });
+    });
+
+    test('uninstalling a known but uninstalled package is a 500 saying so', async () => {
+        const listed = (await (
+            await fetch(BASE + '/api/v2/packages')
+        ).json()) as {
+            language: string;
+            language_version: string;
+            installed: boolean;
+        }[];
+        const absent = listed.find(p => !p.installed);
+        if (!absent) return; // everything in the index is installed
+
+        const res = await request('DELETE', '/api/v2/packages', {
+            language: absent.language,
+            version: absent.language_version,
+        });
+        expect(res.status).toBe(500);
+        expect(res.body).toEqual({
+            message: `${absent.language}-${absent.language_version} is not installed`,
+        });
     });
 });
 

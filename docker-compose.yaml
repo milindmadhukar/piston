@@ -2,7 +2,12 @@ version: '3.2'
 
 services:
     api:
-        build: api
+        build:
+            # The repository root, so packages/ manifests are baked in.
+            context: .
+            dockerfile: api/Dockerfile
+            # Without this the builder stage, being last, is what gets tagged.
+            target: runtime
         container_name: piston_api
         restart: always
         privileged: true

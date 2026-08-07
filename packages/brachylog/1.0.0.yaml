@@ -1,0 +1,47 @@
+language: brachylog
+version: '1.0.0'
+aliases: []
+build: |
+    # build prolog 8.2.4 as dependency
+    source ../../prolog/8.2.4/build.sh
+
+    # curl brachylog 1.0.0
+    curl -L "https://github.com/JCumin/Brachylog/archive/refs/tags/v1.0-ascii.tar.gz" -o brachylog.tar.gz
+    tar xzf brachylog.tar.gz --strip-components=1
+    rm brachylog.tar.gz
+
+    # move swi prolog to working directory
+    cp bin/swipl swipl
+
+    # give execution permission to swipl
+    chmod +x swipl
+
+    # add some code the branchylog.pl so we don't have to escape backslashes while using the interactive mode
+    echo '
+
+    :-feature(argv, [Code, Stdin]), run_from_atom(Code, Stdin, _), halt.' >> prolog_parser/brachylog.pl
+env:
+    PATH: '{pkgdir}/bin:{PATH}'
+    BRACHYLOG_PATH: '{pkgdir}'
+run: |
+    # save the file for later
+    file="$1"
+
+    # remove the file from $@
+    shift
+
+    # save stdin as $@ joined by newlines
+    stdin=`printf "%s\n" "$@"`
+
+    # save code as the contents of $file
+    code=`cat "$file"`
+
+    # go to the directory where brachylog.pl is so the imports work
+    cd "$BRACHYLOG_PATH"/prolog_parser
+
+    # run swi prolog with code and stdin
+    swipl -f brachylog.pl "$code" "$stdin"
+test:
+    language: brachylog
+    expect: OK
+    source: '"OK"w'

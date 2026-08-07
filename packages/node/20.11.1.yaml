@@ -1,0 +1,19 @@
+language: node
+version: '20.11.1'
+provides:
+    - language: javascript
+      aliases: [node-javascript, node-js, javascript, js]
+glibc: '2.28'
+sources:
+    - url: https://nodejs.org/dist/v20.11.1/node-v20.11.1-linux-x64.tar.xz
+      sha256: d8dab549b09672b03356aa2257699f3de3b58c96e74eb26a8b495fbdc9cf6fbe
+      strip: 1
+env:
+    PATH: '{pkgdir}/bin:{PATH}'
+run: |
+    node "$@"
+test:
+    expect: OK
+    source: |
+        console.log('OK');
+    language: js

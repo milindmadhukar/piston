@@ -1,0 +1,19 @@
+language: dart
+version: '3.0.1'
+aliases: []
+glibc: '2.18'
+sources:
+    - url: https://storage.googleapis.com/dart-archive/channels/stable/release/3.0.1/sdk/dartsdk-linux-x64-release.zip
+      sha256: caab438213bffba5ab704d88155710327f0fc4326594224714271bf823dfdc70
+env:
+    PATH: '{pkgdir}/bin:{PATH}'
+run: |
+    # Put instructions to run the runtime
+    dart run "$@"
+test:
+    expect: OK
+    source: |
+        void main() {
+          print('OK');
+        }
+    language: dart

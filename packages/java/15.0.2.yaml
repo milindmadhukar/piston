@@ -1,0 +1,25 @@
+language: java
+version: '15.0.2'
+aliases: []
+glibc: '2.4'
+sources:
+    - url: https://download.java.net/java/GA/jdk15.0.2/0d1cfde4252546c6931946de8db48ee2/7/GPL/openjdk-15.0.2_linux-x64_bin.tar.gz
+      sha256: 91ac6fc353b6bf39d995572b700e37a20e119a87034eeb939a6f24356fbcd207
+      strip: 1
+env:
+    PATH: '{pkgdir}/bin:{PATH}'
+run: |
+    # Put instructions to run the runtime
+    mv $1 $1.java
+    filename=$1.java
+    shift
+    java $filename "$@"
+test:
+    expect: OK
+    source: |
+        public class HelloWorld {
+            public static void main(String[] args) {
+                System.out.println("OK");
+            }
+        }
+    language: java

@@ -1,0 +1,32 @@
+language: zig
+version: '0.10.1'
+aliases: []
+limit_overrides:
+    compile_timeout: 15000
+    compile_cpu_time: 15000
+glibc: none
+sources:
+    - url: https://ziglang.org/download/0.10.1/zig-linux-x86_64-0.10.1.tar.xz
+      sha256: 6699f0e7293081b42428f32c9d9c983854094bd15fee5489f12c4cf4518cc380
+      strip: 1
+      into: bin
+env:
+    PATH: '{pkgdir}/bin:{PATH}'
+compile: |
+    # optimizing for small programs
+    rename 's/$/\.zig/' "$@" # Add .zig extension
+
+    zig build-exe -O ReleaseSafe --color off --cache-dir . --global-cache-dir . --name out *.zig
+run: |
+    shift # Filename is only used in compile step, so we can take it out here
+    ./out "$@"
+test:
+    expect: OK
+    source: |
+        const std = @import("std");
+
+        pub fn main() !void {
+            const stdout = std.io.getStdOut().writer();
+            try stdout.print("OK\n", .{});
+        }
+    language: zig

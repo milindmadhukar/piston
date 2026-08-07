@@ -1,0 +1,29 @@
+language: rust
+version: '1.63.0'
+aliases: [rs]
+build: |
+    curl -OL "https://static.rust-lang.org/dist/rust-1.63.0-x86_64-unknown-linux-gnu.tar.gz"
+    tar xzvf rust-1.63.0-x86_64-unknown-linux-gnu.tar.gz
+    rm rust-1.63.0-x86_64-unknown-linux-gnu.tar.gz
+env:
+    PATH: '{pkgdir}/rust-1.63.0-x86_64-unknown-linux-gnu/rustc/bin/:{PATH}'
+    RUST_INSTALL_LOC: '{pkgdir}/rust-1.63.0-x86_64-unknown-linux-gnu'
+compile: |
+    # https://stackoverflow.com/questions/38041331/rust-compiler-cant-find-crate-for-std
+    # Rust compiler needs to find the stdlib to link against
+    rustc -o binary -L ${RUST_INSTALL_LOC}/rustc/lib -L ${RUST_INSTALL_LOC}/rust-std-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib "$@"
+    chmod +x binary
+run: |
+    shift
+    ./binary "$@"
+test:
+    language: rs
+    expect: OK
+    source: |
+        fn main() {
+            println!("OK");
+
+            // 1.63.0 features
+            use std::sync::Mutex;
+            const _M: Mutex<()> = Mutex::new(());
+        }

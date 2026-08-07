@@ -1,0 +1,61 @@
+language: go
+version: '1.26.5'
+aliases: [go, golang]
+limit_overrides:
+    # `go build` forks a compiler per core and the toolchain links a lot of
+    # stdlib packages, so the default cap of 64 processes is not enough even for
+    # hello world. Compiling also costs more wall time than a script language.
+    max_process_count: 256
+    compile_timeout: 20000
+    compile_cpu_time: 20000
+    # Intermediate stdlib archives and the statically linked binary both blow
+    # past the 10MB default.
+    max_file_size: 100000000
+glibc: none
+sources:
+    - url: https://dl.google.com/go/go1.26.5.linux-amd64.tar.gz
+      sha256: 5c2c3b16caefa1d968a94c1daca04a7ca301a496d9b086e17ad77bb81393f053
+env:
+    PATH: '{pkgdir}/go/bin:{PATH}'
+    GOROOT: '{pkgdir}/go'
+    GOTOOLCHAIN: local
+    GOPROXY: 'off'
+    GOFLAGS: '-mod=mod'
+    CGO_ENABLED: '0'
+compile: |
+    # Piston passes every code file. Files submitted without a name arrive as
+    # fileN.code, so give anything without a .go suffix one before building.
+    for file in "$@"; do
+        [[ "$file" == *.go ]] || mv -- "$file" "${file%.code}.go"
+    done
+
+    # Every writable Go path has to live in the submission directory - the package
+    # directory is read-only inside the sandbox.
+    export GOCACHE="$PWD/.gocache"
+    export GOMODCACHE="$PWD/.gomodcache"
+    export GOPATH="$PWD/.gopath"
+
+    # A submission may ship its own go.mod; only synthesise one if it did not.
+    [[ -f go.mod ]] || go mod init piston > /dev/null 2>&1
+
+    # -p bounds build parallelism. Without it go scales to the host's core
+    # count, which on a big machine blows through the sandbox process limit.
+    go build -p 4 -o piston_program . || exit $?
+
+    # The submission directory is moved into a fresh sandbox for the run stage;
+    # don't carry the build cache across with it.
+    rm -rf .gocache .gomodcache .gopath
+run: |
+    shift # Discard main filename; the compile stage produced the binary
+    ./piston_program "$@"
+test:
+    expect: OK
+    source: |
+        package main
+
+        import "fmt"
+
+        func main() {
+        	fmt.Println("OK")
+        }
+    language: go

@@ -1,0 +1,40 @@
+language: scala
+version: '3.2.2'
+aliases: [sc]
+build: |
+    # Download and extract JDK8
+    curl -L "https://github.com/AdoptOpenJDK/openjdk8-binaries/releases/download/jdk8u292-b10/OpenJDK8U-jdk_x64_linux_hotspot_8u292b10.tar.gz" -o jdk.tar.gz
+    tar xzf jdk.tar.gz --strip-components=1
+    rm jdk.tar.gz
+
+    # Download and extract Scala 3
+    curl -L "https://github.com/lampepfl/dotty/releases/download/3.2.2/scala3-3.2.2.tar.gz" -o scala.tar.gz
+    tar -xzf scala.tar.gz --strip-components=1
+    rm scala.tar.gz
+env:
+    JAVA_HOME: '{pkgdir}'
+    PATH: '{pkgdir}/bin:{PATH}'
+compile: |
+    # Compile scala classes into a jar file
+    scalac "$@" -d out.jar
+
+    # Create the Manifest and include scala lib jars:
+    # NOTE: - entry point will only consider @main and App traits from the main file
+    #       - scala lib jars will be added to the class path in order to run the jar properly
+    echo "Main-Class: $(grep -oP '\@main\s+def\s+\K[a-zA-Z][a-zA-Z0-9]*|object\s+\K[a-zA-Z][a-zA-Z0-9]*(?=\s+extends\s+App)' $1)
+    Class-Path:  $(echo $JAVA_HOME/lib/*.jar | sed 's/\s/\n  /g')
+    " > manifest.txt
+
+    # Update the jar with the manifest
+    jar ufm out.jar manifest.txt
+run: |
+    # Run jar file
+    shift
+    java -jar out.jar "$@"
+test:
+    language: scala
+    expect: OK
+    source: |
+        @main def run(): Unit = {
+          println("OK")
+        }

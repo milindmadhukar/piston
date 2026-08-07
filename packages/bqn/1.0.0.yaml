@@ -1,0 +1,21 @@
+language: bqn
+version: '1.0.0'
+aliases: []
+build: |
+    set -e
+
+    git clone "https://github.com/dzaima/CBQN" bqn
+    cd bqn
+
+    git checkout 88f65850fa6ac28bc50886c5942652f21d5be924
+    make CC=gcc
+env:
+    PATH: '{pkgdir}/bin:{PATH}'
+    BQN_PATH: '{pkgdir}/bqn'
+run: |
+    $BQN_PATH/BQN "$@"
+test:
+    language: bqn
+    expect: OK
+    source: |
+        •Out @⊸+∘(+⟜(2⊸×)´∘⌽¨)∘(-⟜'0') "01001111"‿"01001011"

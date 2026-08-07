@@ -1,0 +1,18 @@
+language: japt
+version: '2.0.0'
+aliases: [japt]
+build: |
+    # japt install
+    source ../../node/16.3.0/build.sh
+
+    git clone -q "https://github.com/Hydrazer/japt.git" japt
+env:
+    PATH: '{pkgdir}/bin:{PATH}'
+    JAPT_PATH: '{pkgdir}/japt'
+run: |
+    # japt only takes filename and stdin
+    node "$JAPT_PATH"/node.js "$1"
+test:
+    language: japt
+    expect: OK
+    source: '"OK'

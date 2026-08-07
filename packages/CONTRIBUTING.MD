@@ -1,105 +1,107 @@
-# Contributing packages to the Piston Repository
+# Adding a language package
 
-## Naming Languages
+A package is **one file**: `packages/<language>/<version>.yaml`. It describes where
+the runtime comes from and how to compile and run a submission with it.
 
-Languages should be named after their interpreters, and the command line binaries you call. The language version should use semantic versioning.
-For example, the full name of the standard python interpreter is `CPython`, however we would name it `python`, after the main binary which it provides.
-In the example of NodeJS, we would call this `node`, after the main binary.
+## Naming
 
-## Creating new languages
+Name a language after its interpreter and the binary it provides — `python`, not
+`CPython`; `node`, not `NodeJS`. The version must be semver. The directory name must
+equal the `language` field and the filename must equal the `version` field; CI enforces
+both, because the filesystem layout is the package index.
 
-See [deno/1.7.5/](deno/1.7.5/) or any other directory for examples.
+## Two kinds of package
 
-1. Create a new branch on your fork of engineer-man/piston
+**Prebuilt** — the common case, and the one to reach for. Upstream already publishes a
+linux-x86_64 tarball, so the engine fetches it, verifies its hash and extracts it. No
+build, no CI, no publishing step: the pull request is the whole change.
 
-2. Create directories named `[language]/[version]`. See Naming Languages for how to determine the name for your language
-
-3. Create a file named `build.sh`, adding a shebang for bash `#!/bin/bash` on the first line.
-   In this file put any steps to compile the specified langauge.
-   This script should download sources, compile sources and output binaries. They should be dumped into the current working directory, removing any files which aren't required in the process.
-
-4. Create a file named `run`, containing bash script to run the interpreter.
-   The first argument given to this script (`$1`) is the name of the main file, with the remaining ones as program arguments.
-   STDIN is piped directly into the run file, and as such nothing special is required to deal with STDIN, except leaving it open.
-
-5. Create a file named `compile`, containing bash script to compile sources into binaries. This is only required if the language requires a compling stage.
-   The first argument is always the main file, followed the names of the other files as additional arguements. If the language does not require a compile stage, don't create a compile file.
-
-6. Create a file named `environment`, containing `export` statements which edit the environment variables accordingly. The `$PWD` variable should be used, and is set inside the package directory when running on the target system.
-
-7. Create a test script starting with test, with the file extension of the language. This script should simply output the phrase `OK`. For example, for mono we would create `test.cs` with the content:
-
-```cs
-using System;
-
-public class Test
-{
-    public static void Main(string[] args)
-    {
-        Console.WriteLine("OK");
-    }
-}
+```yaml
+language: go
+version: '1.26.5'
+aliases: [go, golang]
+glibc: none
+sources:
+    - url: https://dl.google.com/go/go1.26.5.linux-amd64.tar.gz
+      sha256: 5c2c3b16caefa1d968a94c1daca04a7ca301a496d9b086e17ad77bb81393f053
+env:
+    PATH: '{pkgdir}/go/bin:{PATH}'
+    GOROOT: '{pkgdir}/go'
+compile: |
+    go build -o piston_program .
+run: |
+    shift
+    ./piston_program "$@"
+test:
+    expect: OK
+    source: |
+        package main
+        import "fmt"
+        func main() { fmt.Println("OK") }
 ```
 
-8. Create a `metadata.json` file which contains metadata about the language and interpreter. This simply contains the language name, as in the folder name, the version as in the folder name, aliases that can be used to call this package, limit overrides (if any) that can be used to override the default constraints and finally a dependencies map.
-   The dependencies map contains the keys as language names, and the values as semver selectors for packages.
+**Built from source** — for a runtime with no usable prebuilt binary. Add a `build:`
+script instead of (or as well as) `sources:`. CI builds it once and publishes the result
+as an archive, which the engine then installs like any other. Same file format; one
+field's difference.
 
-```json
-{
-    "language": "deno",
-    "version": "1.7.5",
-    "dependencies": {},
-    "aliases": ["deno-ts", "deno-js"]
-}
+```yaml
+build: |
+    ./configure --prefix "$PREFIX" && make -j"$(nproc)" && make install
 ```
 
-If the interpreter/compiler provides multiple languages, then the provides property should be used:
+Before writing a `build:` script, check whether a prebuilt exists — most modern runtimes
+publish one, and several that look like they need compiling do not. Python uses
+[python-build-standalone][pbs], GHC publishes a `deb10` bindist, Erlang has
+[builds.hex.pm][hex], PHP has [static-php][sphp].
 
-```json
-{
-    "language": "dotnet",
-    "version": "5.0.201",
-    "provides": [
-        {
-            "language": "basic.net",
-            "aliases": [
-                "basic",
-                "visual-basic",
-                "visual-basic.net",
-                "vb",
-                "vb.net",
-                "vb-dotnet",
-                "dotnet-vb",
-                "basic-dotnet",
-                "dotnet-basic"
-            ],
-            "limit_overrides": { "max_process_count": 128 }
-        },
-        {
-            "language": "fsi",
-            "aliases": [
-                "fsx",
-                "fsharp-interactive",
-                "f#-interactive",
-                "dotnet-fsi",
-                "fsi-dotnet",
-                "fsi.net"
-            ]
-        }
-    ]
-}
+[pbs]: https://github.com/astral-sh/python-build-standalone
+[hex]: https://builds.hex.pm
+[sphp]: https://dl.static-php.dev
+
+## Fields
+
+| field                   | meaning                                                                                                                                               |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `language`, `version`   | Identity. Must match the path.                                                                                                                        |
+| `aliases`               | Other names `/api/v2/execute` accepts. Omit when using `provides`.                                                                                    |
+| `provides`              | For a toolchain serving several languages (gcc → c, c++, fortran). Each entry takes its own `aliases` and `limit_overrides`.                          |
+| `limit_overrides`       | Per-package limits. Only the keys in `OVERRIDABLE_LIMITS` are accepted.                                                                               |
+| `sources`               | Archives to fetch. Each needs `url` and `sha256`; `strip` and `into` are optional.                                                                    |
+| `glibc`                 | The glibc floor of the prebuilt binaries, or `none` if static. Required for prebuilt packages so CI can reject a binary the base image cannot run.    |
+| `build`, `post_install` | Shell. Their presence is what makes a package need a toolchain.                                                                                       |
+| `env`                   | Rendered straight into the runtime environment. `{pkgdir}` is the install directory, `{PATH}` the system PATH.                                        |
+| `env_script`            | Escape hatch for a value that must be computed at install time. Prefer `env`.                                                                         |
+| `compile`               | Optional. **Its presence is what makes a runtime compiled** — the API reports a separate compile stage with its own timeout. `$@` is every code file. |
+| `run`                   | Required. `$1` is the entrypoint filename, the rest are program arguments. stdin is piped in.                                                         |
+| `test`                  | `source` plus the `expect` string its output must contain. CI runs it.                                                                                |
+
+`sha256` is mandatory and never inferred. The hash is the artifact's identity: it is what
+makes fetching from fifteen different hosts safe.
+
+## Workflow
+
+```sh
+# Pin a prebuilt archive: downloads it, records the hash and the glibc floor
+./piston lock-pkg go/1.26.5 --url https://dl.google.com/go/go1.26.5.linux-amd64.tar.gz
+
+# Check every manifest parses; --fetch also verifies the published checksums
+./piston validate-pkgs
+./piston validate-pkgs --fetch
+
+# Only for a package with a `build:` script
+./piston build-pkg gcc 15.3.0
+
+# Try it on a real instance and run the manifest's own test
+./piston start
+./piston ppman install go=1.26.5
+.github/scripts/test-package.sh go-1.26.5
 ```
 
-9. Test your package builds with running `make [language]-[version].pkg.tar.gz`.
-   If it all goes to plan, you should have a file named `[language]-[version].pkg.tar.gz`, in this case you're good to go, albeit it is preferable to test the package locally as follows
+Add the language to the **Supported Languages** list in `readme.md` — CI fails without it.
 
-```shell
-./piston build-pkg [package] [version]
-./piston ppman install [package]=[version]
-./piston run [package] -l [version] packages/[package]/[version]/test.*
-```
+Commit as `pkg(<language>-<version>): ...` and open a pull request against `main`.
 
-10. Commit your changes, using message format of `pkg([language]-[version]): Added [language] [version]`
-    Any additional commits regarding this package should start with `pkg([language]-[version]): `
-
-11. Create a pull request (currently to v3 branch), referencing an Issue number (if there is one associated).
+For a prebuilt package, merging is all that is needed. For one with a `build:` script,
+`package-push.yaml` builds and publishes the archive on merge; until that run finishes the
+package is listed but not installable.

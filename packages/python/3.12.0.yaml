@@ -1,0 +1,38 @@
+language: python
+version: '3.12.0'
+aliases: [py, py3, python3, python3.12]
+build: |
+    PREFIX=$(realpath $(dirname $0))
+
+    mkdir -p build
+
+    cd build
+
+    curl "https://www.python.org/ftp/python/3.12.0/Python-3.12.0.tgz" -o python.tar.gz
+    tar xzf python.tar.gz --strip-components=1
+    rm python.tar.gz
+
+    ./configure --prefix "$PREFIX" --with-ensurepip=install
+    make -j$(nproc)
+    make install -j$(nproc)
+
+    cd ..
+
+    rm -rf build
+
+    bin/pip3 install numpy scipy pandas pycryptodome whoosh bcrypt passlib sympy xxhash base58 cryptography PyNaCl
+env:
+    PATH: '{pkgdir}/bin:{PATH}'
+run: |
+    python3.12 "$@"
+test:
+    language: py
+    expect: OK
+    source: |
+        working = True
+
+        match working:
+            case True:
+                print("OK")
+            case False:
+                print()

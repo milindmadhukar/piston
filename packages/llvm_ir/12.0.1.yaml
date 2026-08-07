@@ -1,0 +1,31 @@
+language: llvm_ir
+version: '12.0.1'
+aliases: [llvm, llvm-ir, ll]
+build: |
+    curl -L "https://github.com/llvm/llvm-project/releases/download/llvmorg-12.0.1/clang+llvm-12.0.1-x86_64-linux-gnu-ubuntu-16.04.tar.xz" -o llvm-ir.tar.xz
+
+    tar xf llvm-ir.tar.xz clang+llvm-12.0.1-x86_64-linux-gnu-ubuntu-/bin --strip-components=1
+
+    rm llvm-ir.tar.xz
+env:
+    PATH: '{pkgdir}/bin:{PATH}'
+compile: |
+    llc "$@" -o binary.s
+    clang binary.s -o binary
+run: |
+    shift
+    binary "$@"
+test:
+    language: ll
+    expect: OK
+    source: |
+        @.str = private unnamed_addr constant [2 x i8] c"OK"
+
+        declare i32 @puts(i8* nocapture) nounwind
+
+        define i32 @main() {
+            %cast210 = getelementptr [2 x i8],[2 x i8]* @.str, i64 0, i64 0
+
+            call i32 @puts(i8* %cast210)
+            ret i32 0
+        }

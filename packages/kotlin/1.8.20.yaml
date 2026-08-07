@@ -1,0 +1,33 @@
+language: kotlin
+version: '1.8.20'
+aliases: [kt]
+build: |
+    # Download and extract JDK8
+    curl -L "https://github.com/AdoptOpenJDK/openjdk8-binaries/releases/download/jdk8u292-b10/OpenJDK8U-jdk_x64_linux_hotspot_8u292b10.tar.gz" -o jdk.tar.gz
+    tar xzf jdk.tar.gz --strip-components=1
+    rm jdk.tar.gz
+
+    # Download and extract Kotlin
+    curl -L "https://github.com/JetBrains/kotlin/releases/download/v1.8.20/kotlin-compiler-1.8.20.zip" -o kotlin.zip
+    unzip kotlin.zip
+    rm kotlin.zip
+    cp -r kotlinc/* .
+    rm -rf kotlinc
+env:
+    PATH: '{pkgdir}/bin:{PATH}'
+compile: |
+    rename 's/$/\.kt/' "$@" # Add .kt extension
+
+    # Compile Kotlin code to a jar file
+    kotlinc *.kt -include-runtime -d code.jar
+run: |
+    # Run jar file
+    shift
+    java -jar code.jar "$@"
+test:
+    language: kt
+    expect: OK
+    source: |
+        fun main() {
+            println("OK")
+        }

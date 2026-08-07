@@ -1,0 +1,27 @@
+language: befunge93
+version: '0.2.0'
+aliases: [b93]
+build: |
+    # source python 2.7
+    source ../../python/2.7.18/build.sh
+
+    # clone befunge repo
+    git clone -q 'https://github.com/programble/befungee' befunge93
+
+    # go inside befunge93 so we can checkout
+    cd befunge93
+
+    # checkout the version 0.2.0
+    git checkout tag/v0.2.0
+
+    cd ..
+env:
+    PATH: '{pkgdir}/bin:{PATH}'
+    BEFUNGE93_PATH: '{pkgdir}/befunge93'
+run: |
+    # run the befunge program with the file name
+    python2.7 "$BEFUNGE93_PATH"/befungee.py "$1"
+test:
+    language: b93
+    expect: OK
+    source: 64+"KO">:#,_@

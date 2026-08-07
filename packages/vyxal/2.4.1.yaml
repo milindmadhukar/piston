@@ -1,0 +1,30 @@
+language: vyxal
+version: '2.4.1'
+aliases: []
+build: |
+    # get Python source
+    source ../../python/3.9.4/build.sh
+
+    # add regex and pwn modules
+    bin/pip3 install regex pwn
+
+    # make vyxal directory
+    mkdir vyxal
+    cd vyxal
+
+    # Vyxal install
+    curl -L "https://github.com/Vyxal/Vyxal/archive/refs/tags/v2.4.1.tar.gz" -o vyxal.tar.xz
+    tar xf vyxal.tar.xz --strip-components=1
+    rm vyxal.tar.xz
+
+    cd ..
+env:
+    PATH: '{pkgdir}/bin:{PATH}'
+    VYXAL_PATH: '{pkgdir}/vyxal'
+    TERM: xterm
+run: |
+    python3 "$VYXAL_PATH"/Vyxal.py "$1"
+test:
+    language: vyxal
+    expect: OK
+    source: '`OK'

@@ -1,0 +1,27 @@
+language: go
+version: '1.16.2'
+aliases: [go, golang]
+build: |
+    curl -LO https://golang.org/dl/go1.16.2.linux-amd64.tar.gz
+    tar -xzf go1.16.2.linux-amd64.tar.gz
+    rm go1.16.2.linux-amd64.tar.gz
+env:
+    PATH: '{pkgdir}/go/bin:{PATH}'
+    GOPATH: '{pkgdir}/gopath'
+run: |
+    mv $1 $1.go
+    #filename=$1.go
+    filename=*.go
+    shift
+    GOCACHE=$PWD go run $filename "$@"
+test:
+    language: go
+    expect: OK
+    source: |
+        package main
+
+        import "fmt"
+
+        func main() {
+        	fmt.Println("OK")
+        }

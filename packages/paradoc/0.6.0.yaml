@@ -1,0 +1,17 @@
+language: paradoc
+version: '0.6.0'
+aliases: [paradoc]
+build: |
+    source ../../python/3.9.1/build.sh
+
+    git clone -q https://github.com/betaveros/paradoc.git paradoc
+env_script: |
+    export PYTHONPATH=$PYTHONPATH:$PWD/paradoc
+    export PATH=$PWD/bin:$PATH
+run: |
+    # Paradoc only takes filename and stdin
+    python3 -m paradoc "$1"
+test:
+    language: paradoc
+    expect: OK
+    source: '"OK"'

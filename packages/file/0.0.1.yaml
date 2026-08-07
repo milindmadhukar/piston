@@ -1,0 +1,18 @@
+language: file
+version: '0.0.1'
+aliases: [executable, elf, binary]
+build: |
+    # Nothing to do here
+env:
+    PATH: '{pkgdir}:{PATH}'
+run: |
+    filename="$1"
+    chmod +x "$filename"
+    shift
+    ./"$filename" "$@"
+test:
+    language: file
+    expect: OK
+    source: |
+        #!/bin/sh
+        echo OK

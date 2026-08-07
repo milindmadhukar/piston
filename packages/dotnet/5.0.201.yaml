@@ -1,0 +1,154 @@
+language: dotnet
+version: '5.0.201'
+provides:
+    - language: basic.net
+      aliases:
+          [
+              basic,
+              visual-basic,
+              visual-basic.net,
+              vb,
+              vb.net,
+              vb-dotnet,
+              dotnet-vb,
+              basic-dotnet,
+              dotnet-basic,
+          ]
+      limit_overrides:
+          max_process_count: 128
+    - language: fsharp.net
+      aliases:
+          [
+              fsharp,
+              fs,
+              f#,
+              fs.net,
+              f#.net,
+              fsharp-dotnet,
+              fs-dotnet,
+              f#-dotnet,
+              dotnet-fsharp,
+              dotnet-fs,
+              dotnet-fs,
+          ]
+      limit_overrides:
+          max_process_count: 128
+    - language: csharp.net
+      aliases:
+          [
+              csharp,
+              c#,
+              cs,
+              c#.net,
+              cs.net,
+              c#-dotnet,
+              cs-dotnet,
+              csharp-dotnet,
+              dotnet-c#,
+              dotnet-cs,
+              dotnet-csharp,
+          ]
+      limit_overrides:
+          max_process_count: 128
+    - language: fsi
+      aliases:
+          [
+              fsx,
+              fsharp-interactive,
+              f#-interactive,
+              dotnet-fsi,
+              fsi-dotnet,
+              fsi.net,
+          ]
+build: |
+    curl "https://download.visualstudio.microsoft.com/download/pr/73a9cb2a-1acd-4d20-b864-d12797ca3d40/075dbe1dc3bba4aa85ca420167b861b6/dotnet-sdk-5.0.201-linux-x64.tar.gz" -Lo dotnet.tar.gz
+    tar xzf dotnet.tar.gz --strip-components=1
+    rm dotnet.tar.gz
+
+    # Cache nuget packages
+    export DOTNET_CLI_HOME=$PWD
+    ./dotnet new console -o cache_application
+    ./dotnet new console -lang F# -o fs_cache_application
+    ./dotnet new console -lang VB -o vb_cache_application
+    # This calls a restore on the global-packages index ($DOTNET_CLI_HOME/.nuget/packages)
+    # If we want to allow more packages, we could add them to this cache_application
+
+    rm -rf cache_application fs_cache_application vb_cache_application
+    # Get rid of it, we don't actually need the application - just the restore
+env_script: |
+    # Put 'export' statements here for environment variables
+    export DOTNET_ROOT=$PWD
+    export PATH=$DOTNET_ROOT:$PATH
+    export FSI_PATH=$(find $(pwd) -name fsi.dll)
+compile: |
+    [ "${PISTON_LANGUAGE}" == "fsi" ] && exit 0
+
+    export DOTNET_CLI_HOME=$PWD
+    export HOME=$PWD
+
+    dotnet build --help > /dev/null # Shut the thing up
+
+    case "${PISTON_LANGUAGE}" in
+        basic.net)
+            rename 's/$/\.vb/' "$@" # Add .vb extension
+            dotnet new console -lang VB -o . --no-restore
+            rm Program.vb
+            ;;
+        fsharp.net)
+            first_file=$1
+            shift
+            rename 's/$/\.fs/' "$@" # Add .fs extension
+            dotnet new console -lang F# -o . --no-restore
+            mv $first_file Program.fs  # For some reason F#.net doesn't work unless the file name is Program.fs
+            ;;
+        csharp.net)
+            rename 's/$/\.cs/' "$@" # Add .cs extension
+            dotnet new console -o . --no-restore
+            rm Program.cs
+            ;;
+        *)
+            echo "How did you get here? (${PISTON_LANGUAGE})"
+            exit 1
+            ;;
+
+    esac
+
+    dotnet restore --source $DOTNET_ROOT/.nuget/packages
+    dotnet build --no-restore
+run: |
+    # Put instructions to run the runtime
+    export DOTNET_CLI_HOME=$PWD
+
+    case "${PISTON_LANGUAGE}" in
+        basic.net)
+            ;&
+        fsharp.net)
+            ;&
+        csharp.net)
+            shift
+            dotnet bin/Debug/net5.0/$(basename $(realpath .)).dll "$@"
+            ;;
+        fsi)
+            FILENAME=$1
+            rename 's/$/\.fsx/' $FILENAME # Add .fsx extension
+            shift
+            dotnet $FSI_PATH $FILENAME.fsx "$@"
+            ;;
+        *)
+            echo "How did you get here? (${PISTON_LANGUAGE})"
+            exit 1
+            ;;
+    esac
+test:
+    language: cs
+    expect: OK
+    source: |
+        using System;
+
+        public class Test
+        {
+            public static void Main(string[] args)
+            {
+                Console.WriteLine("OK");
+            }
+        }

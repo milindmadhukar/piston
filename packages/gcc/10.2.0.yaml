@@ -1,0 +1,81 @@
+language: gcc
+version: '10.2.0'
+provides:
+    - language: c
+      aliases: [gcc]
+    - language: c++
+      aliases: [cpp, g++]
+    - language: d
+      aliases: [gdc]
+    - language: fortran
+      aliases: [fortran, f90]
+build: |
+    # Put instructions to build your package in here
+    [[ -d "bin" ]] && exit 0
+    PREFIX=$(realpath $(dirname $0))
+
+    mkdir -p build obj
+
+    cd build
+
+    curl "https://ftp.gnu.org/gnu/gcc/gcc-10.2.0/gcc-10.2.0.tar.gz" -o gcc.tar.gz
+
+    tar xzf gcc.tar.gz --strip-components=1
+
+    ./contrib/download_prerequisites
+
+    cd ../obj
+
+    # === autoconf based === 
+    ../build/configure --prefix "$PREFIX" --enable-languages=c,c++,d,fortran --disable-multilib --disable-bootstrap
+
+    make -j$(nproc)
+    make install -j$(nproc)
+    cd ../
+    rm -rf build obj
+env:
+    PATH: '{pkgdir}/bin:{PATH}'
+    LD_LIBRARY_PATH: '"{pkgdir}/lib:{pkgdir}/lib64" # Need this to properly link Fortran'
+compile: |
+    # Put instructions to compile source code, remove this file if the language does not require this stage
+
+
+    case "${PISTON_LANGUAGE}" in
+        c)
+            rename 's/$/\.c/' "$@" # Add .c extension
+            gcc -std=c11 *.c -lm
+            ;;
+        c++)
+            rename 's/$/\.cpp/' "$@" # Add .cpp extension
+            g++ -std=c++17 *.cpp
+            ;;
+        d)
+            rename 's/.code$/\.d/' "$@" # Add .d extension
+            gdc *.d
+            ;;
+        fortran)
+            rename 's/.code$/\.f90/' "$@" # Add .f90 extension
+            gfortran *.f90
+            ;;
+        *)
+            echo "How did you get here? (${PISTON_LANGUAGE})"
+            exit 1
+            ;;
+    esac
+
+    chmod +x a.out
+run: |
+    # Put instructions to run the runtime
+
+    shift # Discard main filename
+    ./a.out "$@"
+test:
+    language: c
+    expect: OK
+    source: |
+        #include <stdio.h>
+
+        int main(void) {
+            printf("OK");
+            return 0;
+        }

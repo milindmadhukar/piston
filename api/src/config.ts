@@ -1,4 +1,5 @@
 import { existsSync } from 'node:fs';
+import path from 'node:path';
 import {
     create,
     is_log_level,
@@ -63,6 +64,9 @@ export interface PistonConfig {
     compile_memory_limit: number;
     run_memory_limit: number;
     repo_url: string;
+    manifest_directory: string;
+    allowed_languages: string[];
+    allow_source_builds: boolean;
     max_concurrent_jobs: number;
     limit_overrides: LimitOverrides;
 }
@@ -82,6 +86,14 @@ interface Option<T> {
 type Options = { [K in keyof PistonConfig]: Option<PistonConfig[K]> };
 
 const parse_int_option = (raw: string): number => parseInt(raw);
+
+function default_manifest_directory(): string {
+    const candidates = [
+        path.join(import.meta.dir, '..', 'packages'),
+        path.join(import.meta.dir, '..', '..', 'packages'),
+    ];
+    return candidates.find(existsSync) ?? (candidates[0] as string);
+}
 
 const numeric: Validator<number>[] = [
     (x, raw) => !isNaN(x) || `${raw} is not a number`,
@@ -200,9 +212,32 @@ const options: Options = {
         validators: numeric,
     },
     repo_url: {
-        desc: 'URL of repo index',
+        desc: 'URL of the index of prebuilt archives for packages that must be built from source',
+        // This fork publishes its own packages; see the `pkgs` release and
+        // .github/workflows/package-push.yaml. There is no upstream fallback.
         default:
-            'https://github.com/engineer-man/piston/releases/download/pkgs/index',
+            'https://github.com/milindmadhukar/piston/releases/download/pkgs/index',
+        validators: [],
+    },
+    manifest_directory: {
+        desc: 'Directory of package manifests. Baked into the image, and the whitelist of what can be installed at all',
+        // In the image `src` and `packages` are siblings under /piston_api;
+        // running from a checkout, packages/ is up at the repository root.
+        default: default_manifest_directory(),
+        validators: [x => existsSync(x) || `Directory ${x} does not exist`],
+    },
+    allowed_languages: {
+        desc: 'Space or comma separated globs of languages that may be installed',
+        default: ['*'],
+        parser: raw => raw.split(/[\s,]+/).filter(Boolean),
+        validators: [
+            x => x.length > 0 || 'must name at least one language pattern',
+        ],
+    },
+    allow_source_builds: {
+        desc: 'Build packages from source at install time. Requires the builder image, which ships a toolchain',
+        default: false,
+        parser: raw => raw === 'true',
         validators: [],
     },
     max_concurrent_jobs: {
@@ -367,6 +402,9 @@ const config: PistonConfig = {
     compile_memory_limit: resolve('compile_memory_limit'),
     run_memory_limit: resolve('run_memory_limit'),
     repo_url: resolve('repo_url'),
+    manifest_directory: resolve('manifest_directory'),
+    allowed_languages: resolve('allowed_languages'),
+    allow_source_builds: resolve('allow_source_builds'),
     max_concurrent_jobs: resolve('max_concurrent_jobs'),
     limit_overrides: resolve('limit_overrides'),
 };

@@ -169,10 +169,50 @@ Useful for running memory-limited contests.
 
 ```yaml
 key: PISTON_REPO_URL
-default: https://github.com/engineer-man/piston/releases/download/pkgs/index
+default: https://github.com/milindmadhukar/piston/releases/download/pkgs/index
 ```
 
-URL for repository index, where packages will be downloaded from.
+URL for the index of prebuilt archives.
+
+Only consulted for a package whose manifest has a `build:` script, i.e. one that
+needs a toolchain to produce. A package that declares a prebuilt upstream archive
+is fetched directly from that archive's own URL and never touches this index.
+
+The index is a plain text file with one `language,version,sha256,url` line per
+archive. The default points at this repository's `pkgs` release, built and
+published by `.github/workflows/package-push.yaml`.
+
+## Manifest Directory
+
+```yaml
+key: PISTON_MANIFEST_DIRECTORY
+default: <alongside the API source>
+```
+
+Directory of package manifests, laid out as `<language>/<version>.yaml`. Baked
+into the image, and the whitelist of what this instance can install at all: a
+language with no manifest cannot be installed however the request is spelled.
+
+## Allowed Languages
+
+```yaml
+key: PISTON_ALLOWED_LANGUAGES
+default: *
+```
+
+Space or comma separated globs of languages that may be installed and listed.
+Narrows the manifest set further, without rebuilding the image.
+
+## Allow Source Builds
+
+```yaml
+key: PISTON_ALLOW_SOURCE_BUILDS
+default: false
+```
+
+Build packages from source at install time rather than fetching an archive from
+the index. Requires the builder image, which is the one that ships a toolchain —
+the default runtime image cannot compile anything. Set to `true` there already.
 
 ## Maximum Concurrent Jobs
 

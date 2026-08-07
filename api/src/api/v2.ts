@@ -11,6 +11,12 @@ import {
     type SubmittedFile,
 } from '../job.ts';
 import Package, { type PackageResult } from '../package.ts';
+import {
+    get_operation,
+    list_operations,
+    start,
+    type Operation,
+} from '../operations.ts';
 import { is_known_signal } from '../globals.ts';
 import { create } from '../logger.ts';
 import { error_message, JobValidationError } from '../errors.ts';
@@ -255,6 +261,8 @@ export async function handle_list_packages(): Promise<Response> {
 interface PackageRequest {
     language?: unknown;
     version?: unknown;
+    /** Operations only; anything other than "uninstall" means install. */
+    kind?: unknown;
 }
 
 /**
@@ -310,20 +318,117 @@ export function handle_uninstall_package(
     return handle_package_action(body, 'uninstall', pkg => pkg.uninstall());
 }
 
+// ------------------------------------------------------------- operations
+
+/**
+ * Async install/uninstall.
+ *
+ * POST /api/v2/packages stays exactly as it always was - synchronous, and the
+ * documented response shape. These are additional endpoints, which is what the
+ * v2 freeze allows, and they exist because building a package from source can
+ * take an hour and nobody wants that on one HTTP request.
+ */
+export async function handle_start_operation(
+    body: PackageRequest
+): Promise<Response> {
+    const { language, version } = body;
+    const kind = body.kind === 'uninstall' ? 'uninstall' : 'install';
+
+    let pkg: Package | null;
+    try {
+        pkg = await Package.get_package(String(language), String(version));
+    } catch (e) {
+        return json_response(500, { message: error_message(e) });
+    }
+
+    if (pkg == null) {
+        return json_response(404, {
+            message: `Requested package ${language}-${version} does not exist`,
+        });
+    }
+
+    const resolved = pkg;
+
+    try {
+        const operation = start(
+            kind,
+            resolved.language,
+            resolved.version.raw,
+            log =>
+                kind === 'install'
+                    ? resolved.install(log)
+                    : resolved.uninstall()
+        );
+        return json_response(202, operation.view);
+    } catch (e) {
+        // Only thrown when the same package already has work in flight.
+        return json_response(409, { message: error_message(e) });
+    }
+}
+
+export function handle_list_operations(): Response {
+    return json_response(200, list_operations());
+}
+
+export function handle_get_operation(id: string): Response {
+    const operation = get_operation(id);
+    if (!operation) {
+        return json_response(404, { message: `Unknown operation ${id}` });
+    }
+    return json_response(200, operation.view);
+}
+
+export function handle_operation_log(id: string): Response {
+    const operation = get_operation(id);
+    if (!operation) {
+        return json_response(404, { message: `Unknown operation ${id}` });
+    }
+    return new Response(operation.log, {
+        status: 200,
+        headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+    });
+}
+
 // -------------------------------------------------------------- websocket
 
 /** Per-connection state. Bun's websocket handlers are global, so this lives on ws.data. */
-export interface ConnectionData {
+export interface JobConnectionData {
+    kind: 'job';
     job: Job | null;
     event_bus: JobEventBus;
     init_timer: ReturnType<typeof setTimeout> | null;
 }
 
-export function new_connection_data(): ConnectionData {
-    return { job: null, event_bus: new_job_event_bus(), init_timer: null };
+/**
+ * State for a socket watching a package operation. A separate endpoint rather
+ * than new message types on /api/v2/connect: the job protocol is frozen, and
+ * teaching it a second vocabulary would change what that endpoint accepts.
+ */
+export interface OperationConnectionData {
+    kind: 'operation';
+    operation: Operation;
+    detach: (() => void) | null;
+}
+
+export type ConnectionData = JobConnectionData | OperationConnectionData;
+
+export function new_connection_data(): JobConnectionData {
+    return {
+        kind: 'job',
+        job: null,
+        event_bus: new_job_event_bus(),
+        init_timer: null,
+    };
+}
+
+export function new_operation_connection_data(
+    operation: Operation
+): OperationConnectionData {
+    return { kind: 'operation', operation, detach: null };
 }
 
 type Socket = ServerWebSocket<ConnectionData>;
+type OperationSocket = ServerWebSocket<OperationConnectionData>;
 
 const WS_OPEN = 1;
 
@@ -342,8 +447,62 @@ function close(ws: Socket, code: CloseCode): void {
     ws.close(code, CLOSE_REASONS[code]);
 }
 
+/** Streams an operation's log to a watcher, then closes when it settles. */
+const operation_socket = {
+    open(ws: OperationSocket) {
+        const state = ws.data;
+        const { operation } = state;
+
+        // Replay what already happened, so a watcher that attaches late still
+        // sees the whole log rather than only the tail.
+        const backlog = operation.log;
+        if (backlog.length) {
+            send_raw(ws, { type: 'log', data: backlog });
+        }
+
+        const on_log = (line: string) =>
+            send_raw(ws, { type: 'log', data: line });
+        const on_state = (op_state: string, error?: string) => {
+            send_raw(ws, {
+                type: 'state',
+                state: op_state,
+                ...(error === undefined ? {} : { error }),
+            });
+            ws.close(1000, 'Operation finished');
+        };
+
+        if (operation.state !== 'running') {
+            on_state(operation.state, operation.error);
+            return;
+        }
+
+        operation.events.on('log', on_log);
+        operation.events.on('state', on_state);
+        state.detach = () => {
+            operation.events.off('log', on_log);
+            operation.events.off('state', on_state);
+        };
+    },
+
+    close(ws: OperationSocket) {
+        ws.data.detach?.();
+        ws.data.detach = null;
+    },
+};
+
+/** Untyped sibling of `send` for the operation protocol, which is not ServerMessage. */
+function send_raw(ws: Socket, payload: Record<string, unknown>): void {
+    if (ws.readyState === WS_OPEN) {
+        ws.send(JSON.stringify(payload));
+    }
+}
+
 export const websocket_handlers = {
     open(ws: Socket) {
+        if (ws.data.kind === 'operation') {
+            operation_socket.open(ws as OperationSocket);
+            return;
+        }
         const state = ws.data;
 
         state.event_bus.on('stdout', data =>
@@ -368,6 +527,8 @@ export const websocket_handlers = {
     },
 
     async message(ws: Socket, raw: string | Buffer) {
+        // The operation socket is read-only; anything a watcher sends is ignored.
+        if (ws.data.kind === 'operation') return;
         const state = ws.data;
 
         try {
@@ -439,6 +600,10 @@ export const websocket_handlers = {
     },
 
     close(ws: Socket) {
+        if (ws.data.kind === 'operation') {
+            operation_socket.close(ws as OperationSocket);
+            return;
+        }
         const state = ws.data;
         if (state.init_timer !== null) {
             clearTimeout(state.init_timer);

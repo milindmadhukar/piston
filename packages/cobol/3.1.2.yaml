@@ -1,0 +1,43 @@
+language: cobol
+version: '3.1.2'
+aliases: [cob]
+build: |
+    # Put instructions to build your package in here
+    PREFIX=$(realpath $(dirname $0))
+
+    mkdir -p build
+
+    cd build
+
+    curl -OL "https://downloads.sourceforge.net/project/gnucobol/gnucobol/3.1/gnucobol-3.1.2.tar.xz"
+
+    tar xf gnucobol-3.1.2.tar.xz --strip-components=1
+
+    # === autoconf based ===
+    ./configure --prefix "$PREFIX" --without-db
+
+    make -j$(nproc)
+    make install -j$(nproc)
+    cd ../
+    rm -rf build
+env:
+    PATH: '{pkgdir}/bin:{PATH}'
+    LD_LIBRARY_PATH: '{pkgdir}/lib'
+compile: |
+    cobc -o binary --free -x -L lib "$@"
+    chmod +x binary
+run: |
+    shift
+    ./binary "$@"
+test:
+    language: cob
+    expect: OK
+    source: |
+        *> Test Program
+        identification division.
+        program-id. ok-test.
+
+        procedure division.
+        display "OK"
+        goback.
+        end program ok-test.

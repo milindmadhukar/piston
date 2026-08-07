@@ -1,0 +1,33 @@
+language: husk
+version: '1.0.0'
+aliases: []
+build: |
+    cp ../../haskell/9.0.1/build.sh ./haskell-build.sh
+    sed -Ei 's/9\.0\.1/8\.10\.7/g' ./haskell-build.sh
+    source ./haskell-build.sh
+
+    # compile Husk from source
+    git clone -q "https://github.com/barbuz/husk.git"
+    cd husk
+    ../bin/ghc -O2 Husk
+
+    # cleanup
+    cd ..
+    rm -f haskell-build.sh
+env:
+    PATH: '{pkgdir}/bin:{PATH}'
+    HUSK_PATH: '{pkgdir}/husk'
+    LANG: en_US.UTF8
+run: |
+    # Store the current path because we'll need it to run the program file
+    PROGRAM_PATH=$PWD
+
+    # For now, Husk can only be run within the folder that has the imported modules
+    cd $HUSK_PATH
+
+    # Run Husk from file in unicode format with the given args
+    ./Husk -uf "${PROGRAM_PATH}/${@}"
+test:
+    language: husk
+    expect: OK
+    source: '"OK'

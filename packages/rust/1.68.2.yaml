@@ -1,0 +1,25 @@
+language: rust
+version: '1.68.2'
+aliases: [rs]
+glibc: '2.17'
+sources:
+    - url: https://static.rust-lang.org/dist/rust-1.68.2-x86_64-unknown-linux-gnu.tar.gz
+      sha256: df7c7466ef35556e855c0d35af7ff08e133040400452eb3427c53202b6731926
+env:
+    PATH: '{pkgdir}/rust-1.68.2-x86_64-unknown-linux-gnu/rustc/bin/:{PATH}'
+    RUST_INSTALL_LOC: '{pkgdir}/rust-1.68.2-x86_64-unknown-linux-gnu'
+compile: |
+    # https://stackoverflow.com/questions/38041331/rust-compiler-cant-find-crate-for-std
+    # Rust compiler needs to find the stdlib to link against
+    rustc -o binary -L ${RUST_INSTALL_LOC}/rustc/lib -L ${RUST_INSTALL_LOC}/rust-std-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib "$@"
+    chmod +x binary
+run: |
+    shift
+    ./binary "$@"
+test:
+    expect: OK
+    source: |
+        fn main() {
+            println!("OK");
+        }
+    language: rs

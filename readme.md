@@ -1,6 +1,6 @@
 <h1 align="center">
-    <a href="https://github.com/engineer-man/piston">
-        <img src="var/docs/images/piston.svg" valign="middle" width="58" height="58" alt="engineer-man piston" />
+    <a href="https://github.com/milindmadhukar/piston">
+        <img src="var/docs/images/piston.svg" valign="middle" width="58" height="58" alt="piston" />
     </a>
     <span valign="middle">
         Piston
@@ -12,14 +12,14 @@
 <br>
 
 <p align="center">
-    <a href="https://github.com/engineer-man/piston/commits/master">
-    <img src="https://img.shields.io/github/last-commit/engineer-man/piston.svg?style=for-the-badge&logo=github&logoColor=white"
+    <a href="https://github.com/milindmadhukar/piston/commits/main">
+    <img src="https://img.shields.io/github/last-commit/milindmadhukar/piston.svg?style=for-the-badge&logo=github&logoColor=white"
          alt="GitHub last commit">
-    <a href="https://github.com/engineer-man/piston/issues">
-    <img src="https://img.shields.io/github/issues/engineer-man/piston.svg?style=for-the-badge&logo=github&logoColor=white"
+    <a href="https://github.com/milindmadhukar/piston/issues">
+    <img src="https://img.shields.io/github/issues/milindmadhukar/piston.svg?style=for-the-badge&logo=github&logoColor=white"
          alt="GitHub issues">
-    <a href="https://github.com/engineer-man/piston/pulls">
-    <img src="https://img.shields.io/github/issues-pr-raw/engineer-man/piston.svg?style=for-the-badge&logo=github&logoColor=white"
+    <a href="https://github.com/milindmadhukar/piston/pulls">
+    <img src="https://img.shields.io/github/issues-pr-raw/milindmadhukar/piston.svg?style=for-the-badge&logo=github&logoColor=white"
          alt="GitHub pull requests">
 </p>
 
@@ -121,7 +121,7 @@ POST https://emkc.org/api/v2/piston/execute
 
 ```sh
 # clone and enter repo
-git clone https://github.com/engineer-man/piston
+git clone https://github.com/milindmadhukar/piston
 ```
 
 > [!NOTE]
@@ -155,7 +155,7 @@ docker run \
     -dit \
     -p 2000:2000 \
     --name piston_api \
-    ghcr.io/engineer-man/piston
+    ghcr.io/milindmadhukar/piston
 ```
 
 ## Piston for testing packages locally

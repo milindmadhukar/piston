@@ -1,0 +1,32 @@
+language: rockstar
+version: '1.0.0'
+aliases: [rock, rocky]
+build: |
+    # Using the Rocky implementation of the Rockstar spec
+
+    # Download Java
+    source ../../java/15.0.2/build.sh
+
+    # Download Rocky and the wrapper
+    curl -LO "https://github.com/gaborsch/rocky/raw/master/rocky.jar"
+    curl -LO "https://github.com/gaborsch/rocky/raw/master/rockstar"
+    chmod +x rockstar
+env:
+    ROCKSTAR_PATH: '{pkgdir}'
+    PATH: '{pkgdir}/bin:{PATH}'
+run: |
+    # Run Rockstar file (no args or multifile execution, only stdin)
+    $ROCKSTAR_PATH/rockstar "$1"
+test:
+    language: rock
+    expect: OK
+    source: |
+        My heart is burning powerless
+        My mind is failing right
+        Cast my heart
+        Cast my mind
+
+        My feelings are empty
+        Let my feelings be with my heart
+        Let my feelings be with my mind
+        Shout my feelings

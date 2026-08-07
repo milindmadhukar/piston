@@ -1,0 +1,46 @@
+name: Release
+
+# Cutting a release is just pushing a tag:
+#
+#   # bump "version" in api/package.json to match, commit, then
+#   git tag v4.0.0 && git push origin v4.0.0
+#
+# That fans out to images.yaml (which publishes :4.0.0, :4.0, :4 and moves
+# :latest) and to this workflow, which creates the GitHub release.
+
+on:
+    push:
+        tags:
+            - 'v*.*.*'
+
+permissions:
+    contents: write
+
+jobs:
+    release:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                  fetch-depth: 0
+
+            - name: Check the tag matches api/package.json
+              # globals.version is read from this file at boot and served on GET /,
+              # so a mismatch means the running API misreports its own version.
+              run: |
+                  tag=${GITHUB_REF_NAME#v}
+                  pkg=$(jq -r .version api/package.json)
+                  if [ "$tag" != "$pkg" ]; then
+                    echo "::error::tag $GITHUB_REF_NAME does not match api/package.json version $pkg"
+                    exit 1
+                  fi
+                  echo "Releasing $GITHUB_REF_NAME"
+
+            - name: Create the release
+              env:
+                  GH_TOKEN: ${{ github.token }}
+              run: |
+                  gh release create "$GITHUB_REF_NAME" \
+                    --title "$GITHUB_REF_NAME" \
+                    --generate-notes \
+                    --verify-tag
