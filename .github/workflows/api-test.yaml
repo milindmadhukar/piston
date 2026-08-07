@@ -1,0 +1,143 @@
+name: Typecheck and test API
+
+on:
+    workflow_dispatch:
+    pull_request:
+        paths:
+            - api/**
+            - cli/**
+            - .github/workflows/api-test.yaml
+    push:
+        branches:
+            - master
+            - v3
+        paths:
+            - api/**
+            - cli/**
+            - .github/workflows/api-test.yaml
+
+jobs:
+    typecheck:
+        runs-on: ubuntu-latest
+        name: Typecheck and unit tests
+        steps:
+            - uses: actions/checkout@v4
+
+            - uses: oven-sh/setup-bun@v2
+              with:
+                  bun-version: latest
+
+            - name: Install api dependencies
+              run: bun install --frozen-lockfile
+              working-directory: api
+
+            - name: Install cli dependencies
+              run: bun install --frozen-lockfile
+              working-directory: cli
+
+            - name: Typecheck api
+              run: bunx tsc --noEmit
+              working-directory: api
+
+            - name: Typecheck cli
+              run: bunx tsc --noEmit
+              working-directory: cli
+
+            - name: Unit tests
+              run: bun test tests/unit.test.ts
+              working-directory: api
+
+            - name: Check formatting
+              run: bunx prettier --ignore-unknown --check .
+
+    contract:
+        runs-on: ubuntu-latest
+        name: v2 contract tests
+        # The contract suite drives real isolate sandboxes, so it needs a
+        # privileged container on a pure cgroup v2 host.
+        steps:
+            - uses: actions/checkout@v4
+
+            - uses: oven-sh/setup-bun@v2
+              with:
+                  bun-version: latest
+
+            - name: Verify the host is cgroup v2
+              run: |
+                  if [ "$(stat -fc %T /sys/fs/cgroup)" != "cgroup2fs" ]; then
+                    echo "::error::Runner is not pure cgroup v2; the contract suite cannot run"
+                    exit 1
+                  fi
+
+            - name: Build the API image
+              run: docker compose -f docker-compose.dev.yaml build api
+
+            - name: Start the API
+              run: docker compose -f docker-compose.dev.yaml up -d api
+
+            - name: Wait for the API
+              run: |
+                  for i in $(seq 1 30); do
+                    if curl -sf http://127.0.0.1:2000/ > /dev/null; then
+                      echo "API is up"; exit 0
+                    fi
+                    sleep 2
+                  done
+                  echo "::error::API did not come up"
+                  docker logs piston_api
+                  exit 1
+
+            - name: Install the bash test runtime
+              # A hand-built minimal package, so the suite does not depend on
+              # the remote package index being reachable.
+              run: |
+                  docker exec -u root piston_api bash -c '
+                    PKG=/piston/packages/bash/5.0.0
+                    mkdir -p "$PKG"
+                    printf "%s\n" "{\"language\":\"bash\",\"version\":\"5.0.0\",\"build_platform\":\"docker-debian\",\"aliases\":[\"sh\"]}" > "$PKG/pkg-info.json"
+                    printf "#!/usr/bin/env bash\nexec bash \"\$@\"\n" > "$PKG/run"
+                    printf "PATH=/usr/bin:/bin:/usr/local/bin\n" > "$PKG/.env"
+                    date +%s > "$PKG/.ppman-installed"
+                    chmod +x "$PKG/run"
+                    chown -R piston:piston /piston/packages
+                  '
+                  docker restart piston_api
+                  sleep 8
+
+            - name: Install api dependencies
+              run: bun install --frozen-lockfile
+              working-directory: api
+
+            - name: Run the contract suite
+              run: bun test
+              working-directory: api
+              env:
+                  PISTON_URL: http://127.0.0.1:2000
+
+            # The slot-release suite needs an instance with a capacity of one:
+            # against the default 64 a leaked slot cannot make a test fail.
+            - name: Start a single-slot instance
+              run: |
+                  docker run -d --privileged -p 2001:2000 \
+                    -e PISTON_MAX_CONCURRENT_JOBS=1 \
+                    -v "$PWD/data/piston/packages:/piston/packages" \
+                    --name piston_single_slot piston-api
+                  for i in $(seq 1 30); do
+                    if curl -sf http://127.0.0.1:2001/ > /dev/null; then exit 0; fi
+                    sleep 2
+                  done
+                  echo "::error::single-slot instance did not come up"
+                  docker logs piston_single_slot
+                  exit 1
+
+            - name: Run the slot-release suite
+              run: bun test tests/slot_release.test.ts
+              working-directory: api
+              env:
+                  PISTON_SINGLE_SLOT_URL: http://127.0.0.1:2001
+
+            - name: API logs on failure
+              if: failure()
+              run: |
+                  docker logs piston_api
+                  docker logs piston_single_slot || true

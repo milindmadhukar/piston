@@ -1,13 +1,77 @@
-const logger = require('logplease').create('runtime');
-const semver = require('semver');
-const config = require('./config');
-const globals = require('./globals');
-const fss = require('fs');
-const path = require('path');
+import semver, { type SemVer } from 'semver';
+import { existsSync, readFileSync } from 'node:fs';
+import path from 'node:path';
 
-const runtimes = [];
+import config, { type LanguageLimits } from './config.ts';
+import globals from './globals.ts';
+import { create } from './logger.ts';
 
-class Runtime {
+const logger = create('runtime');
+
+/** Limits that differ between the compile and run stages. */
+export interface StageLimits {
+    compile: number;
+    run: number;
+}
+
+/** The fully-resolved limit set for one runtime. */
+export interface ComputedLimits {
+    timeouts: StageLimits;
+    cpu_times: StageLimits;
+    memory_limits: StageLimits;
+    max_process_count: number;
+    max_open_files: number;
+    max_file_size: number;
+    output_max_size: number;
+}
+
+export interface RuntimeOptions extends ComputedLimits {
+    language: string;
+    version: SemVer;
+    aliases?: string[];
+    pkgdir: string;
+    /**
+     * Set only for packages that provide several languages, in which case it
+     * names the providing package. Left undefined otherwise, which keeps it
+     * absent from the GET /api/v2/runtimes response - part of the v2 contract.
+     */
+    runtime?: string;
+}
+
+/** Shape of a package's pkg-info.json on disk. */
+interface PackageInfo {
+    language: string;
+    version: string;
+    build_platform: string;
+    aliases?: string[];
+    provides?: {
+        language: string;
+        aliases?: string[];
+        limit_overrides?: LanguageLimits;
+    }[];
+    limit_overrides?: LanguageLimits;
+}
+
+/** Every runtime currently registered. Mutated by load_package/unregister. */
+export const runtimes: Runtime[] = [];
+
+export class Runtime implements ComputedLimits {
+    language: string;
+    version: SemVer;
+    aliases: string[];
+    pkgdir: string;
+    runtime?: string;
+    timeouts: StageLimits;
+    cpu_times: StageLimits;
+    memory_limits: StageLimits;
+    max_process_count: number;
+    max_open_files: number;
+    max_file_size: number;
+    output_max_size: number;
+
+    #compiled?: boolean;
+    #env_vars?: string[];
+
     constructor({
         language,
         version,
@@ -21,7 +85,7 @@ class Runtime {
         max_open_files,
         max_file_size,
         output_max_size,
-    }) {
+    }: RuntimeOptions) {
         this.language = language;
         this.version = version;
         this.aliases = aliases || [];
@@ -37,20 +101,23 @@ class Runtime {
     }
 
     static compute_single_limit(
-        language_name,
-        limit_name,
-        language_limit_overrides
-    ) {
+        language_name: string,
+        limit_name: keyof LanguageLimits,
+        language_limit_overrides?: LanguageLimits
+    ): number {
+        // `??`, not `||`: a limit deliberately overridden to 0 must be honoured
+        // rather than treated as absent and silently replaced by the global.
         return (
-            (config.limit_overrides[language_name] &&
-                config.limit_overrides[language_name][limit_name]) ||
-            (language_limit_overrides &&
-                language_limit_overrides[limit_name]) ||
+            config.limit_overrides[language_name]?.[limit_name] ??
+            language_limit_overrides?.[limit_name] ??
             config[limit_name]
         );
     }
 
-    static compute_all_limits(language_name, language_limit_overrides) {
+    static compute_all_limits(
+        language_name: string,
+        language_limit_overrides?: LanguageLimits
+    ): ComputedLimits {
         return {
             timeouts: {
                 compile: this.compute_single_limit(
@@ -111,20 +178,20 @@ class Runtime {
         };
     }
 
-    static load_package(package_dir) {
-        let info = JSON.parse(
-            fss.read_file_sync(path.join(package_dir, 'pkg-info.json'))
+    static load_package(package_dir: string): void {
+        const info: PackageInfo = JSON.parse(
+            readFileSync(path.join(package_dir, 'pkg-info.json')).toString()
         );
 
-        let {
-            language,
-            version,
-            build_platform,
-            aliases,
-            provides,
-            limit_overrides,
-        } = info;
-        version = semver.parse(version);
+        const { language, build_platform, aliases, provides, limit_overrides } =
+            info;
+
+        const version = semver.parse(info.version);
+        if (version === null) {
+            throw new Error(
+                `Package ${language} has an unparseable version: ${info.version}`
+            );
+        }
 
         if (build_platform !== globals.platform) {
             logger.warn(
@@ -165,60 +232,65 @@ class Runtime {
         logger.debug(`Package ${language}-${version} was loaded`);
     }
 
-    get compiled() {
-        if (this._compiled === undefined) {
-            this._compiled = fss.exists_sync(path.join(this.pkgdir, 'compile'));
+    get compiled(): boolean {
+        if (this.#compiled === undefined) {
+            this.#compiled = existsSync(path.join(this.pkgdir, 'compile'));
         }
 
-        return this._compiled;
+        return this.#compiled;
     }
 
-    get env_vars() {
-        if (!this._env_vars) {
+    get env_vars(): string[] {
+        if (!this.#env_vars) {
             const env_file = path.join(this.pkgdir, '.env');
-            const env_content = fss.read_file_sync(env_file).toString();
+            const env_content = readFileSync(env_file).toString();
 
-            this._env_vars = env_content.trim().split('\n');
+            this.#env_vars = env_content.trim().split('\n');
         }
 
-        return this._env_vars;
+        return this.#env_vars;
     }
 
-    toString() {
+    toString(): string {
         return `${this.language}-${this.version.raw}`;
     }
 
-    unregister() {
+    unregister(): void {
         const index = runtimes.indexOf(this);
         runtimes.splice(index, 1); //Remove from runtimes list
     }
 }
 
-module.exports = runtimes;
-module.exports.Runtime = Runtime;
-module.exports.get_runtimes_matching_language_version = function (lang, ver) {
+export function get_runtimes_matching_language_version(
+    lang: string,
+    ver: string
+): Runtime[] {
     return runtimes.filter(
         rt =>
             (rt.language == lang || rt.aliases.includes(lang)) &&
             semver.satisfies(rt.version, ver)
     );
-};
-module.exports.get_latest_runtime_matching_language_version = function (
-    lang,
-    ver
-) {
-    return module.exports
-        .get_runtimes_matching_language_version(lang, ver)
-        .sort((a, b) => semver.rcompare(a.version, b.version))[0];
-};
+}
 
-module.exports.get_runtime_by_name_and_version = function (runtime, ver) {
+export function get_latest_runtime_matching_language_version(
+    lang: string,
+    ver: string
+): Runtime | undefined {
+    return get_runtimes_matching_language_version(lang, ver).sort((a, b) =>
+        semver.rcompare(a.version, b.version)
+    )[0];
+}
+
+export function get_runtime_by_name_and_version(
+    runtime: string,
+    ver: string
+): Runtime | undefined {
     return runtimes.find(
         rt =>
             (rt.runtime == runtime ||
                 (rt.runtime === undefined && rt.language == runtime)) &&
             semver.satisfies(rt.version, ver)
     );
-};
+}
 
-module.exports.load_package = Runtime.load_package;
+export const load_package = Runtime.load_package;

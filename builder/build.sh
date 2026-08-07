@@ -32,11 +32,11 @@ fetch_packages(){
 
     # Ensure the CLI is installed
     cd ../cli
-    npm i
+    bun install
     cd -
 
     # Evalulate the specfile
-    ../cli/index.js -u "http://127.0.0.1:$port" ppman spec $1
+    bun run ../cli/index.ts -u "http://127.0.0.1:$port" ppman spec $1
 }
 
 build_container(){
@@ -52,8 +52,7 @@ TAG=$2
 
 [ -f "$SPEC_FILE" ] || help_msg "specfile does not exist"
 
-which node || help_msg "nodejs is required"
-which npm || help_msg "npm is required"
+which bun || help_msg "bun is required"
 
 trap cleanup EXIT
 

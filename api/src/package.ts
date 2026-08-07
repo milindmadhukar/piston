@@ -1,32 +1,60 @@
-const logger = require('logplease').create('package');
-const semver = require('semver');
-const config = require('./config');
-const globals = require('./globals');
-const fetch = require('node-fetch');
-const path = require('path');
-const fs = require('fs/promises');
-const fss = require('fs');
-const cp = require('child_process');
-const crypto = require('crypto');
-const runtime = require('./runtime');
-const chownr = require('chownr');
-const util = require('util');
+import semver, { type SemVer } from 'semver';
+import path from 'node:path';
+import fs from 'node:fs/promises';
+import { existsSync } from 'node:fs';
+import cp from 'node:child_process';
+import chownr from 'chownr';
+import util from 'node:util';
 
-class Package {
-    constructor({ language, version, download, checksum }) {
+import config from './config.ts';
+import globals from './globals.ts';
+import { create } from './logger.ts';
+import { get_runtime_by_name_and_version, load_package } from './runtime.ts';
+import { error_message } from './errors.ts';
+
+const logger = create('package');
+
+const chownr_async = util.promisify(chownr);
+
+export interface PackageOptions {
+    language: string;
+    version: string;
+    download: string;
+    checksum: string;
+}
+
+/** The shape returned by install()/uninstall(), and by POST/DELETE /api/v2/packages. */
+export interface PackageResult {
+    language: string;
+    version: string;
+}
+
+export default class Package {
+    language: string;
+    version: SemVer;
+    checksum: string;
+    download: string;
+
+    constructor({ language, version, download, checksum }: PackageOptions) {
+        const parsed = semver.parse(version);
+        if (parsed === null) {
+            throw new Error(
+                `Package ${language} has an unparseable version: ${version}`
+            );
+        }
         this.language = language;
-        this.version = semver.parse(version);
+        this.version = parsed;
         this.checksum = checksum;
         this.download = download;
     }
 
-    get installed() {
-        return fss.exists_sync(
+    get installed(): boolean {
+        return existsSync(
             path.join(this.install_path, globals.pkg_installed_file)
         );
     }
 
-    get install_path() {
+    get install_path(): string {
         return path.join(
             config.data_directory,
             globals.data_directories.packages,
@@ -35,14 +63,14 @@ class Package {
         );
     }
 
-    async install() {
+    async install(): Promise<PackageResult> {
         if (this.installed) {
             throw new Error('Already installed');
         }
 
         logger.info(`Installing ${this.language}-${this.version.raw}`);
 
-        if (fss.exists_sync(this.install_path)) {
+        if (existsSync(this.install_path)) {
             logger.warn(
                 `${this.language}-${this.version.raw} has residual files. Removing them.`
             );
@@ -57,27 +85,22 @@ class Package {
         );
         const pkgpath = path.join(this.install_path, 'pkg.tar.gz');
         const download = await fetch(this.download);
-
-        const file_stream = fss.create_write_stream(pkgpath);
-        await new Promise((resolve, reject) => {
-            download.body.pipe(file_stream);
-            download.body.on('error', reject);
-
-            file_stream.on('finish', resolve);
-        });
+        if (!download.ok) {
+            throw new Error(
+                `Failed to download package: ${download.status} ${download.statusText}`
+            );
+        }
+        // Bun.write streams the response straight to disk without buffering it.
+        await Bun.write(pkgpath, download);
 
         logger.debug('Validating checksums');
         logger.debug(`Assert sha256(pkg.tar.gz) == ${this.checksum}`);
-        const hash = crypto.create_hash('sha256');
 
-        const read_stream = fss.create_read_stream(pkgpath);
-        await new Promise((resolve, reject) => {
-            read_stream.on('data', chunk => hash.update(chunk));
-            read_stream.on('end', () => resolve());
-            read_stream.on('error', error => reject(error));
-        });
-
-        const cs = hash.digest('hex');
+        const hasher = new Bun.CryptoHasher('sha256');
+        for await (const chunk of Bun.file(pkgpath).stream()) {
+            hasher.update(chunk);
+        }
+        const cs = hasher.digest('hex');
 
         if (cs !== this.checksum) {
             throw new Error(
@@ -89,28 +112,28 @@ class Package {
             `Extracting package files from archive ${pkgpath} in to ${this.install_path}`
         );
 
-        await new Promise((resolve, reject) => {
+        await new Promise<void>((resolve, reject) => {
             const proc = cp.exec(
                 `bash -c 'cd "${this.install_path}" && tar xzf ${pkgpath}'`
             );
 
-            proc.once('exit', (code, _) => {
+            proc.once('exit', code => {
                 code === 0 ? resolve() : reject();
             });
 
-            proc.stdout.pipe(process.stdout);
-            proc.stderr.pipe(process.stderr);
+            proc.stdout?.pipe(process.stdout);
+            proc.stderr?.pipe(process.stderr);
 
             proc.once('error', reject);
         });
 
         logger.debug('Registering runtime');
-        runtime.load_package(this.install_path);
+        load_package(this.install_path);
 
         logger.debug('Caching environment');
         const get_env_command = `cd ${this.install_path}; source environment; env`;
 
-        const envout = await new Promise((resolve, reject) => {
+        const envout = await new Promise<string>((resolve, reject) => {
             let stdout = '';
 
             const proc = cp.spawn(
@@ -121,11 +144,11 @@ class Package {
                 }
             );
 
-            proc.once('exit', (code, _) => {
+            proc.once('exit', code => {
                 code === 0 ? resolve(stdout) : reject();
             });
 
-            proc.stdout.on('data', data => {
+            proc.stdout.on('data', (data: Buffer) => {
                 stdout += data;
             });
 
@@ -137,22 +160,24 @@ class Package {
             .filter(
                 l =>
                     !['PWD', 'OLDPWD', '_', 'SHLVL'].includes(
-                        l.split('=', 2)[0]
+                        l.split('=', 2)[0] ?? ''
                     )
             )
             .join('\n');
 
-        await fs.write_file(path.join(this.install_path, '.env'), filtered_env);
+        await fs.writeFile(path.join(this.install_path, '.env'), filtered_env);
 
         logger.debug('Changing Ownership of package directory');
-        await util.promisify(chownr)(
-            this.install_path,
-            process.getuid(),
-            process.getgid()
-        );
+        // getuid/getgid are POSIX-only and therefore optional in the type.
+        const uid = process.getuid?.();
+        const gid = process.getgid?.();
+        if (uid === undefined || gid === undefined) {
+            throw new Error('Cannot determine uid/gid on this platform');
+        }
+        await chownr_async(this.install_path, uid, gid);
 
         logger.debug('Writing installed state to disk');
-        await fs.write_file(
+        await fs.writeFile(
             path.join(this.install_path, globals.pkg_installed_file),
             Date.now().toString()
         );
@@ -165,11 +190,11 @@ class Package {
         };
     }
 
-    async uninstall() {
+    async uninstall(): Promise<PackageResult> {
         logger.info(`Uninstalling ${this.language}-${this.version.raw}`);
 
         logger.debug('Finding runtime');
-        const found_runtime = runtime.get_runtime_by_name_and_version(
+        const found_runtime = get_runtime_by_name_and_version(
             this.language,
             this.version.raw
         );
@@ -187,7 +212,7 @@ class Package {
         found_runtime.unregister();
 
         logger.debug('Cleaning files from disk');
-        await fs.rmdir(this.install_path, { recursive: true });
+        await fs.rm(this.install_path, { recursive: true, force: true });
 
         logger.info(`Uninstalled ${this.language}-${this.version.raw}`);
 
@@ -197,24 +222,35 @@ class Package {
         };
     }
 
-    static async get_package_list() {
-        const repo_content = await fetch(config.repo_url).then(x => x.text());
+    static async get_package_list(): Promise<Package[]> {
+        const response = await fetch(config.repo_url);
+        const repo_content = await response.text();
 
         const entries = repo_content.split('\n').filter(x => x.length > 0);
 
-        return entries.map(line => {
+        return entries.flatMap(line => {
             const [language, version, checksum, download] = line.split(',', 4);
+            if (!language || !version || !checksum || !download) {
+                logger.warn(`Skipping malformed package index line: ${line}`);
+                return [];
+            }
 
-            return new Package({
-                language,
-                version,
-                checksum,
-                download,
-            });
+            try {
+                return [new Package({ language, version, checksum, download })];
+            } catch (e) {
+                logger.warn(
+                    `Skipping unparseable package index line: ${line}`,
+                    error_message(e)
+                );
+                return [];
+            }
         });
     }
 
-    static async get_package(lang, version) {
+    static async get_package(
+        lang: string,
+        version: string
+    ): Promise<Package | null> {
         const packages = await Package.get_package_list();
 
         const candidates = packages.filter(pkg => {
@@ -228,5 +264,3 @@ class Package {
         return candidates[0] || null;
     }
 }
-
-module.exports = Package;

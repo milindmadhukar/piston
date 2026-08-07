@@ -70,7 +70,7 @@ case $1 in
 
     update)
         git pull
-        cd cli && npm i > /dev/null && cd -
+        cd cli && bun install > /dev/null && cd -
         docker_compose pull
         docker_compose up -d
         ;;
@@ -90,12 +90,14 @@ case $1 in
         ;;
 
     lint)
-        npm install
-        npx prettier --ignore-unknown --write .
+        # Use the pinned prettier from the root package.json - an unpinned
+        # prettier reformats the whole repo with different defaults.
+        bun install > /dev/null
+        ./node_modules/.bin/prettier --ignore-unknown --write .
         ;;
     *)
-        [ -d ./cli/node_modules ] || npm i > /dev/null
+        [ -d ./cli/node_modules ] || (cd cli && bun install > /dev/null)
         cd "$EXECUTION_PATH"
-        node "${PISTON_PATH}/cli/index.js" "$@"
+        bun run "${PISTON_PATH}/cli/index.ts" "$@"
         ;;
 esac

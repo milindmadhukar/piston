@@ -1,0 +1,634 @@
+{
+    "root": {
+        "status": 200,
+        "content_type": "application/json; charset=utf-8",
+        "body": {
+            "message": "Piston v3.1.1"
+        }
+    },
+    "not_found": {
+        "status": 404,
+        "content_type": "application/json; charset=utf-8",
+        "body": {
+            "message": "Not Found"
+        }
+    },
+    "runtimes": {
+        "status": 200,
+        "content_type": "application/json; charset=utf-8",
+        "body": [
+            {
+                "language": "bash",
+                "version": "5.0.0",
+                "aliases": ["sh"]
+            }
+        ]
+    },
+    "execute_no_content_type": {
+        "status": 415,
+        "content_type": "application/json; charset=utf-8",
+        "body": {
+            "message": "requests must be of type application/json"
+        }
+    },
+    "execute_wrong_content_type": {
+        "status": 415,
+        "content_type": "application/json; charset=utf-8",
+        "body": {
+            "message": "requests must be of type application/json"
+        }
+    },
+    "runtimes_head": {
+        "status": 200,
+        "content_type": "application/json; charset=utf-8",
+        "body": ""
+    },
+    "malformed_json_body": {
+        "status": 400,
+        "content_type": "application/json; charset=utf-8",
+        "body": {
+            "stack": "SyntaxError: JSON Parse error: Expected '}'\n    at <parse> (:0)\n    at parse (unknown)\n    at handle (/piston_api/src/index.ts:110:29)\n    at async fetch (/piston_api/src/index.ts:162:31)\n    at processTicksAndRejections (native:7:39)"
+        }
+    },
+    "execute_wrong_method": {
+        "status": 404,
+        "content_type": "application/json; charset=utf-8",
+        "body": {
+            "message": "Not Found"
+        }
+    },
+    "connect_over_http": {
+        "status": 404,
+        "content_type": "application/json; charset=utf-8",
+        "body": {
+            "message": "Not Found"
+        }
+    },
+    "post_root": {
+        "status": 404,
+        "content_type": "application/json; charset=utf-8",
+        "body": {
+            "message": "Not Found"
+        }
+    },
+    "missing_language": {
+        "status": 400,
+        "content_type": "application/json; charset=utf-8",
+        "body": {
+            "message": "language is required as a string"
+        }
+    },
+    "language_not_string": {
+        "status": 400,
+        "content_type": "application/json; charset=utf-8",
+        "body": {
+            "message": "language is required as a string"
+        }
+    },
+    "missing_version": {
+        "status": 400,
+        "content_type": "application/json; charset=utf-8",
+        "body": {
+            "message": "version is required as a string"
+        }
+    },
+    "version_not_string": {
+        "status": 400,
+        "content_type": "application/json; charset=utf-8",
+        "body": {
+            "message": "version is required as a string"
+        }
+    },
+    "missing_files": {
+        "status": 400,
+        "content_type": "application/json; charset=utf-8",
+        "body": {
+            "message": "files is required as an array"
+        }
+    },
+    "files_not_array": {
+        "status": 400,
+        "content_type": "application/json; charset=utf-8",
+        "body": {
+            "message": "files is required as an array"
+        }
+    },
+    "file_content_not_string": {
+        "status": 400,
+        "content_type": "application/json; charset=utf-8",
+        "body": {
+            "message": "files[0].content is required as a string"
+        }
+    },
+    "unknown_runtime": {
+        "status": 400,
+        "content_type": "application/json; charset=utf-8",
+        "body": {
+            "message": "brainfuck-* runtime is unknown"
+        }
+    },
+    "no_utf8_file": {
+        "status": 400,
+        "content_type": "application/json; charset=utf-8",
+        "body": {
+            "message": "files must include at least one utf8 encoded file"
+        }
+    },
+    "constraint_not_number": {
+        "status": 400,
+        "content_type": "application/json; charset=utf-8",
+        "body": {
+            "message": "If specified, run_timeout must be a number"
+        }
+    },
+    "constraint_exceeds_limit": {
+        "status": 400,
+        "content_type": "application/json; charset=utf-8",
+        "body": {
+            "message": "run_timeout cannot exceed the configured limit of 3000"
+        }
+    },
+    "constraint_negative": {
+        "status": 400,
+        "content_type": "application/json; charset=utf-8",
+        "body": {
+            "message": "run_timeout must be non-negative"
+        }
+    },
+    "constraint_zero": {
+        "status": 200,
+        "content_type": "application/json; charset=utf-8",
+        "body": {
+            "run": {
+                "signal": null,
+                "stdout": "ok\n",
+                "stderr": "",
+                "code": 0,
+                "output": "ok\n",
+                "memory": 876000,
+                "message": null,
+                "status": null,
+                "cpu_time": 3,
+                "wall_time": 17
+            },
+            "language": "bash",
+            "version": "5.0.0"
+        }
+    },
+    "execute_basic": {
+        "status": 200,
+        "content_type": "application/json; charset=utf-8",
+        "body": {
+            "run": {
+                "signal": null,
+                "stdout": "ok\n",
+                "stderr": "",
+                "code": 0,
+                "output": "ok\n",
+                "memory": 1048000,
+                "message": null,
+                "status": null,
+                "cpu_time": 3,
+                "wall_time": 3
+            },
+            "language": "bash",
+            "version": "5.0.0"
+        }
+    },
+    "execute_stdin": {
+        "status": 200,
+        "content_type": "application/json; charset=utf-8",
+        "body": {
+            "run": {
+                "signal": null,
+                "stdout": "got:world\n",
+                "stderr": "",
+                "code": 0,
+                "output": "got:world\n",
+                "memory": 788000,
+                "message": null,
+                "status": null,
+                "cpu_time": 3,
+                "wall_time": 3
+            },
+            "language": "bash",
+            "version": "5.0.0"
+        }
+    },
+    "execute_args": {
+        "status": 200,
+        "content_type": "application/json; charset=utf-8",
+        "body": {
+            "run": {
+                "signal": null,
+                "stdout": "args:a b\n",
+                "stderr": "",
+                "code": 0,
+                "output": "args:a b\n",
+                "memory": 516000,
+                "message": null,
+                "status": null,
+                "cpu_time": 2,
+                "wall_time": 3
+            },
+            "language": "bash",
+            "version": "5.0.0"
+        }
+    },
+    "execute_exit_code": {
+        "status": 200,
+        "content_type": "application/json; charset=utf-8",
+        "body": {
+            "run": {
+                "signal": null,
+                "stdout": "",
+                "stderr": "e\n",
+                "code": 3,
+                "output": "e\n",
+                "memory": 784000,
+                "message": "Exited with error status 3",
+                "status": "RE",
+                "cpu_time": 3,
+                "wall_time": 3
+            },
+            "language": "bash",
+            "version": "5.0.0"
+        }
+    },
+    "execute_alias": {
+        "status": 200,
+        "content_type": "application/json; charset=utf-8",
+        "body": {
+            "run": {
+                "signal": null,
+                "stdout": "ok\n",
+                "stderr": "",
+                "code": 0,
+                "output": "ok\n",
+                "memory": 788000,
+                "message": null,
+                "status": null,
+                "cpu_time": 4,
+                "wall_time": 4
+            },
+            "language": "bash",
+            "version": "5.0.0"
+        }
+    },
+    "execute_semver_range": {
+        "status": 200,
+        "content_type": "application/json; charset=utf-8",
+        "body": {
+            "run": {
+                "signal": null,
+                "stdout": "ok\n",
+                "stderr": "",
+                "code": 0,
+                "output": "ok\n",
+                "memory": 512000,
+                "message": null,
+                "status": null,
+                "cpu_time": 3,
+                "wall_time": 3
+            },
+            "language": "bash",
+            "version": "5.0.0"
+        }
+    },
+    "execute_timeout": {
+        "status": 200,
+        "content_type": "application/json; charset=utf-8",
+        "body": {
+            "run": {
+                "signal": "SIGKILL",
+                "stdout": "",
+                "stderr": "",
+                "code": null,
+                "output": "",
+                "memory": 1020000,
+                "message": "Time limit exceeded (wall clock)",
+                "status": "TO",
+                "cpu_time": 4,
+                "wall_time": 600
+            },
+            "language": "bash",
+            "version": "5.0.0"
+        }
+    },
+    "execute_output_limit": {
+        "status": 200,
+        "content_type": "application/json; charset=utf-8",
+        "body": {
+            "run": {
+                "signal": "SIGKILL",
+                "stdout": "",
+                "stderr": "Sandbox keeper received fatal signal 6\n",
+                "code": null,
+                "output": "Sandbox keeper received fatal signal 6\n",
+                "memory": 1616000,
+                "message": "stdout length exceeded",
+                "status": "OL",
+                "cpu_time": 6,
+                "wall_time": 17
+            },
+            "language": "bash",
+            "version": "5.0.0"
+        }
+    },
+    "execute_path_escape": {
+        "status": 500,
+        "content_type": null,
+        "body": ""
+    },
+    "execute_empty_files": {
+        "status": 400,
+        "content_type": "application/json; charset=utf-8",
+        "body": {
+            "message": "files must include at least one utf8 encoded file"
+        }
+    },
+    "options_execute": {
+        "status": 404,
+        "content_type": "application/json; charset=utf-8",
+        "body": {
+            "message": "Not Found"
+        }
+    },
+    "unmatched_v2_post_no_ct": {
+        "status": 415,
+        "content_type": "application/json; charset=utf-8",
+        "body": {
+            "message": "requests must be of type application/json"
+        }
+    },
+    "unmatched_v2_post_json": {
+        "status": 404,
+        "content_type": "application/json; charset=utf-8",
+        "body": {
+            "message": "Not Found"
+        }
+    },
+    "unmatched_v2_bad_json": {
+        "status": 400,
+        "content_type": "application/json; charset=utf-8",
+        "body": {
+            "stack": "SyntaxError: JSON Parse error: Expected '}'\n    at <parse> (:0)\n    at parse (unknown)\n    at handle (/piston_api/src/index.ts:110:29)\n    at async fetch (/piston_api/src/index.ts:162:31)\n    at processTicksAndRejections (native:7:39)"
+        }
+    },
+    "unmatched_v2_get": {
+        "status": 404,
+        "content_type": "application/json; charset=utf-8",
+        "body": {
+            "message": "Not Found"
+        }
+    },
+    "head_root": {
+        "status": 200,
+        "content_type": "application/json; charset=utf-8",
+        "body": ""
+    },
+    "execute_scalar_body": {
+        "status": 400,
+        "content_type": "application/json; charset=utf-8",
+        "body": {
+            "message": "language is required as a string"
+        }
+    },
+    "execute_array_body": {
+        "status": 400,
+        "content_type": "application/json; charset=utf-8",
+        "body": {
+            "message": "language is required as a string"
+        }
+    },
+    "ws_lifecycle": {
+        "messages": [
+            {
+                "type": "runtime",
+                "language": "bash",
+                "version": "5.0.0"
+            },
+            {
+                "type": "stage",
+                "stage": "run"
+            },
+            {
+                "type": "data",
+                "stream": "stdout",
+                "data": "ok\n"
+            },
+            {
+                "type": "exit",
+                "stage": "run",
+                "code": 0,
+                "signal": null
+            }
+        ],
+        "close_code": 4999,
+        "close_reason": "Job Completed"
+    },
+    "ws_double_init": {
+        "messages": [
+            {
+                "type": "runtime",
+                "language": "bash",
+                "version": "5.0.0"
+            },
+            {
+                "type": "stage",
+                "stage": "run"
+            }
+        ],
+        "close_code": 4000,
+        "close_reason": "Already Initialized"
+    },
+    "ws_init_timeout": {
+        "messages": [],
+        "close_code": 4001,
+        "close_reason": "Initialization Timeout"
+    },
+    "ws_data_before_init": {
+        "messages": [],
+        "close_code": 4003,
+        "close_reason": "Not yet initialized"
+    },
+    "ws_signal_before_init": {
+        "messages": [],
+        "close_code": 4003,
+        "close_reason": "Not yet initialized"
+    },
+    "ws_bad_stream": {
+        "messages": [
+            {
+                "type": "runtime",
+                "language": "bash",
+                "version": "5.0.0"
+            },
+            {
+                "type": "stage",
+                "stage": "run"
+            }
+        ],
+        "close_code": 4004,
+        "close_reason": "Can only write to stdin"
+    },
+    "ws_invalid_signal": {
+        "messages": [
+            {
+                "type": "runtime",
+                "language": "bash",
+                "version": "5.0.0"
+            },
+            {
+                "type": "stage",
+                "stage": "run"
+            }
+        ],
+        "close_code": 4005,
+        "close_reason": "Invalid signal"
+    },
+    "ws_malformed": {
+        "messages": [
+            {
+                "type": "error",
+                "message": "JSON Parse error: Unexpected identifier \"this\""
+            }
+        ],
+        "close_code": 4002,
+        "close_reason": "Notified Error"
+    },
+    "ws_stdin": {
+        "messages": [
+            {
+                "type": "runtime",
+                "language": "bash",
+                "version": "5.0.0"
+            },
+            {
+                "type": "stage",
+                "stage": "run"
+            },
+            {
+                "type": "data",
+                "stream": "stdout",
+                "data": "got:world\n"
+            },
+            {
+                "type": "exit",
+                "stage": "run",
+                "code": 0,
+                "signal": null
+            }
+        ],
+        "close_code": 4999,
+        "close_reason": "Job Completed"
+    },
+    "ws_signal_delivered": {
+        "messages": [
+            {
+                "type": "runtime",
+                "language": "bash",
+                "version": "5.0.0"
+            },
+            {
+                "type": "stage",
+                "stage": "run"
+            },
+            {
+                "type": "exit",
+                "stage": "run",
+                "code": null,
+                "signal": "SIGKILL"
+            }
+        ],
+        "close_code": 4999,
+        "close_reason": "Job Completed"
+    },
+    "ws_stop_signal_accepted": {
+        "messages": [
+            {
+                "type": "runtime",
+                "language": "bash",
+                "version": "5.0.0"
+            },
+            {
+                "type": "stage",
+                "stage": "run"
+            },
+            {
+                "type": "data",
+                "stream": "stdout",
+                "data": "done\n"
+            },
+            {
+                "type": "exit",
+                "stage": "run",
+                "code": 0,
+                "signal": null
+            }
+        ],
+        "close_code": 4999,
+        "close_reason": "Job Completed"
+    },
+    "ws_path_escape": {
+        "messages": [
+            {
+                "type": "error",
+                "message": "File path \"../escape.sh\" tries to escape parent directory: ../escape.sh"
+            }
+        ],
+        "close_code": 4002,
+        "close_reason": "Notified Error"
+    },
+    "ws_unknown_type": {
+        "messages": [],
+        "close_code": 4001,
+        "close_reason": "Initialization Timeout"
+    },
+    "ws_init_invalid": {
+        "messages": [
+            {
+                "type": "error",
+                "message": "language is required as a string"
+            }
+        ],
+        "close_code": 4002,
+        "close_reason": "Notified Error"
+    },
+    "ws_empty_files": {
+        "messages": [
+            {
+                "type": "error",
+                "message": "files must include at least one utf8 encoded file"
+            }
+        ],
+        "close_code": 4002,
+        "close_reason": "Notified Error"
+    },
+    "ws_rt_signal": {
+        "messages": [
+            {
+                "type": "runtime",
+                "language": "bash",
+                "version": "5.0.0"
+            },
+            {
+                "type": "stage",
+                "stage": "run"
+            },
+            {
+                "type": "data",
+                "stream": "stdout",
+                "data": "done\n"
+            },
+            {
+                "type": "exit",
+                "stage": "run",
+                "code": 0,
+                "signal": null
+            }
+        ],
+        "close_code": 4999,
+        "close_reason": "Job Completed"
+    }
+}
