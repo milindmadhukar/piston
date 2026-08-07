@@ -26,6 +26,14 @@ fail() {
 
 json() { curl -s --max-time "${TIMEOUT:-3600}" -H 'Content-Type: application/json' "$@"; }
 
+# A build heavy enough to be OOM-killed takes the whole container with it, and
+# every package after it then "fails" instantly against nothing. Report that as
+# its own state so a caller can stop rather than churn through the rest.
+if ! curl -sf --max-time 10 "$BASE/" > /dev/null; then
+    echo "UNAVAILABLE $SLUG (no API at $BASE)"
+    exit 2
+fi
+
 # --------------------------------------------------------------- install
 
 # Start from a known state so the run is repeatable; a leftover install from an
