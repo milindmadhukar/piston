@@ -8,7 +8,10 @@ build: |
     rm node.tar.xz
     # --- end of node/18.15.0 ---
 
-    source ./environment
+    # The env: block replaced the environment file the old layout had, so
+    # export what this build needs directly: npm below runs from the node
+    # inlined above.
+    export PATH=$PWD/bin:$PATH
 
     bin/npm install -g typescript@5.0.3
 
