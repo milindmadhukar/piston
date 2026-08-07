@@ -102,4 +102,10 @@ RUN apt-get update && apt-get install -y \
     ln -sf /bin/bash /bin/sh && \
     rm -rf /var/lib/apt/lists/*
 
+# Package build scripts call curl directly and its progress meter is redrawn
+# continuously, which bloats install logs and buries the actual error. buster's
+# curl predates --no-progress-meter, so silent + show-error is the equivalent.
+RUN printf 'silent\nshow-error\n' > /home/piston/.curlrc && \
+    chown piston:piston /home/piston/.curlrc
+
 ENV PISTON_ALLOW_SOURCE_BUILDS=true
