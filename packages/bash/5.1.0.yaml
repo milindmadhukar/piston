@@ -16,8 +16,13 @@ build: |
     # === autoconf based ===
     ./configure --prefix "$PREFIX"
 
-    make -j$(nproc)
-    make install -j$(nproc)
+    # Serial on purpose. bash's Makefile never declares that bashline.c needs
+    # builtins/builtext.h, which the builtins subdirectory generates, so a
+    # parallel build races to compile bashline.o before that header exists and
+    # fails about half the time with "builtins/builtext.h: No such file or
+    # directory". bash is small enough that -j buys little either way.
+    make
+    make install
     cd ../
     rm -rf build
 env:
