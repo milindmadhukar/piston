@@ -35,7 +35,13 @@ build: |
     rm -rf build obj
 env:
     PATH: '{pkgdir}/bin:{PATH}'
-    LD_LIBRARY_PATH: '"{pkgdir}/lib:{pkgdir}/lib64" # Need this to properly link Fortran'
+    # So a compiled program finds this gcc's libstdc++ and libgfortran rather
+    # than the base image's, which are much older.
+    #
+    # No quotes and no trailing comment in the value: .env is split into
+    # literal KEY=VALUE lines and handed to the sandbox, never sourced by a
+    # shell, so anything after the `=` ends up inside the variable.
+    LD_LIBRARY_PATH: '{pkgdir}/lib:{pkgdir}/lib64'
 compile: |
     # Put instructions to compile source code, remove this file if the language does not require this stage
 

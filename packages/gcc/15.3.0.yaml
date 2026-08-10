@@ -42,7 +42,14 @@ build: |
     rm -rf build obj
 env:
     PATH: '{pkgdir}/bin:{PATH}'
-    LD_LIBRARY_PATH: '"{pkgdir}/lib:{pkgdir}/lib64" # Need this to properly link Fortran'
+    # So a compiled program finds this gcc's libstdc++ and libgfortran rather
+    # than the base image's, which are much older. Without it a C++ program
+    # built here dies at startup with `version GLIBCXX_3.4.32 not found`.
+    #
+    # No quotes and no trailing comment in the value: .env is split into
+    # literal KEY=VALUE lines and handed to the sandbox, never sourced by a
+    # shell, so anything after the `=` ends up inside the variable.
+    LD_LIBRARY_PATH: '{pkgdir}/lib:{pkgdir}/lib64'
 compile: |
     # Piston passes every code file. Files submitted without a name arrive as
     # fileN.code; named ones keep whatever the client sent, so only append an
