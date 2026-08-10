@@ -3,6 +3,7 @@ import { describe, expect, test } from 'bun:test';
 import { error_message } from '../src/errors.ts';
 import { create, is_log_level, LOG_LEVELS } from '../src/logger.ts';
 import globals, { SIGNALS } from '../src/globals.ts';
+import { fetch_index } from '../src/package_index.ts';
 
 describe('error_message', () => {
     test('unwraps an Error', () => {
@@ -71,5 +72,57 @@ describe('SIGNALS table', () => {
 
     test('exposes the same table on the default export', () => {
         expect(globals.SIGNALS).toBe(SIGNALS);
+    });
+});
+
+describe('fetch_index', () => {
+    // CI republishes the index with `gh release upload --clobber`, which drops
+    // the old asset before uploading the new one. Every install of a
+    // source-built package used to fail outright inside that window.
+    function index_server(fail_first: number, body = 'bash,5.2.0,abc,url\n') {
+        let hits = 0;
+        return Bun.serve({
+            port: 0,
+            fetch() {
+                hits++;
+                if (hits <= fail_first) {
+                    return new Response('Not Found', { status: 404 });
+                }
+                return new Response(body);
+            },
+        });
+    }
+
+    test('returns the index when it answers first time', async () => {
+        const server = index_server(0);
+        try {
+            expect(await fetch_index(server.url.href, 3, 1)).toBe(
+                'bash,5.2.0,abc,url\n'
+            );
+        } finally {
+            server.stop(true);
+        }
+    });
+
+    test('recovers from a 404 while the asset is being replaced', async () => {
+        const server = index_server(2);
+        try {
+            expect(await fetch_index(server.url.href, 5, 1)).toBe(
+                'bash,5.2.0,abc,url\n'
+            );
+        } finally {
+            server.stop(true);
+        }
+    });
+
+    test('still reports the last failure once attempts run out', async () => {
+        const server = index_server(99);
+        try {
+            await expect(fetch_index(server.url.href, 3, 1)).rejects.toThrow(
+                /Failed to fetch the package index: 404/
+            );
+        } finally {
+            server.stop(true);
+        }
     });
 });

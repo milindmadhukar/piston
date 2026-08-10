@@ -12,6 +12,7 @@ import globals from './globals.ts';
 import { create } from './logger.ts';
 import { runtimes, load_package } from './runtime.ts';
 import { error_message } from './errors.ts';
+import { fetch_index } from './package_index.ts';
 import {
     is_engine_installable,
     render_build,
@@ -133,14 +134,9 @@ export default class Package {
      * from the index rather than be derived from a URL pattern.
      */
     async #prebuilt_entry(): Promise<{ url: string; sha256: string }> {
-        const response = await fetch(config.repo_url);
-        if (!response.ok) {
-            throw new Error(
-                `Failed to fetch the package index: ${response.status} ${response.statusText}`
-            );
-        }
+        const body = await fetch_index(config.repo_url);
 
-        for (const line of (await response.text()).split('\n')) {
+        for (const line of body.split('\n')) {
             const [language, version, sha256, url] = line.split(',', 4);
             if (
                 language === this.language &&
