@@ -29,7 +29,12 @@ build: |
     # No d front end here, unlike gcc/10.2.0: from GCC 12 onward it is written in D
     # and needs an existing GDC to bootstrap, which the buster builder does not have.
     # gcc/10.2.0 stays the provider for the d language.
-    ../build/configure --prefix "$PREFIX" --enable-languages=c,c++,fortran --disable-multilib --disable-bootstrap
+    # --disable-libsanitizer: buster's binutils cannot link libhwasan from a
+    # gcc this new - `ld: final link failed: nonrepresentable section on
+    # output` - and bumping binutils would mean moving off buster, which every
+    # other package is prebuilt against. The cost is that this gcc has no
+    # -fsanitize=address/undefined/thread; it compiles everything else normally.
+    ../build/configure --prefix "$PREFIX" --enable-languages=c,c++,fortran --disable-multilib --disable-bootstrap --disable-libsanitizer
 
     make -j$(nproc)
     make install -j$(nproc)
