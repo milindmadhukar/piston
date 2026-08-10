@@ -12,8 +12,10 @@ build: |
     make linux
     # To check that Lua has been built correctly
     make test
-    # Installing Lua
-    make linux install
+
+    # No install step: env.PATH below runs lua straight out of the build tree,
+    # and `make install` defaults to INSTALL_TOP=/usr/local, which the build
+    # user cannot write to.
 env:
     PATH: '{pkgdir}/lua-5.4.2/src:{PATH}'
 run: |
