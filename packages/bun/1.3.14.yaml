@@ -1,0 +1,28 @@
+language: bun
+version: '1.3.14'
+provides:
+    - language: typescript
+      aliases: [bun, bun-ts]
+    - language: javascript
+      aliases: [bun-js]
+glibc: '2.17'
+sources:
+    - url: https://github.com/oven-sh/bun/releases/download/bun-v1.3.14/bun-linux-x64.zip
+      sha256: 951ee2aee855f08595aeec6225226a298d3fea83a3dcd6465c09cbccdf7e848f
+      strip: 1
+env:
+    PATH: '{pkgdir}:{PATH}'
+run: |
+    # Bun transpiles TypeScript on the fly, so there is no compile stage. The
+    # leading ./ matters: `bun run <name>` would otherwise prefer a package.json
+    # script of that name over the submitted file.
+    CODE=$1
+    shift
+
+    NO_COLOR=1 bun run "./$CODE" "$@"
+test:
+    expect: OK
+    source: |
+        const greeting: string = 'OK';
+        console.log(greeting);
+    language: bun
