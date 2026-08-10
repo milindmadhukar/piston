@@ -224,6 +224,13 @@ code for a particular language using the `/api/v2/execute` endpoint, either the 
 be provided, along with the version.
 Multiple versions of the same language may be present at the same time, and may be selected when running a job.
 
+A language may also be served by more than one runtime — `javascript` by node, deno and
+bun — in which case each entry carries a `runtime` naming its own. Selection is by version
+number, and version numbers are not comparable across runtimes, so a bare `javascript`
+picks whichever runtime happens to have the highest one. **To ask for a particular runtime,
+use an alias that belongs to it alone**, such as `bun-js` or `node-js`; every runtime
+sharing a language is guaranteed to have one.
+
 ```json
 HTTP/1.1 200 OK
 Content-Type: application/json
@@ -290,6 +297,8 @@ This endpoint requests execution of some arbitrary code.
 
 A typical response upon successful execution will contain 1 or 2 keys `run` and `compile`.
 `compile` will only be present if the language requested requires a compile stage.
+A `runtime` key naming the engine is present when — and only when — the language has more
+than one, as described under the runtimes endpoint above.
 
 Each of these keys has an identical structure, containing both a `stdout` and `stderr` key, which is a string containing the text outputted during the stage into each buffer.
 It also contains the `code` and `signal` which was returned from each process. It also includes a nullable human-readable `message` which is a description of why a stage has failed and a two-letter `status` that is either:
@@ -341,7 +350,7 @@ To interact with running processes in real time, you can establish a WebSocket c
 Each message is structured as a JSON object with a `type` key, which indicates the action to perform. Below is a list of message types, their directions, and descriptions:
 
 - **init** (client -> server): Initializes a job with the same parameters as the `/execute` endpoint, except that stdin is discarded.
-- **runtime** (server -> client): Provides details on the runtime environment, including the version and language.
+- **runtime** (server -> client): Provides details on the runtime environment, including the version and language. Carries a `runtime` key naming the engine as well, on the same terms as the runtimes endpoint: only when the language has more than one.
 - **stage** (server -> client): Indicates the current execution stage, either "compile" or "run."
 - **data** (server <-> client): Exchanges data between the client and server, such as stdin, stdout, or stderr streams.
 - **signal** (client -> server): Sends a signal (e.g., for termination) to the running process, whether it's in the "compile" or "run" stage.

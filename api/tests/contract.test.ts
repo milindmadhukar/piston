@@ -384,6 +384,69 @@ describe('execute', () => {
     });
 });
 
+/**
+ * A language served by several engines - javascript by node, deno and bun -
+ * resolves by version number alone, so the only way a caller can tell which one
+ * ran is for the instance to say. `runtime` is that answer, and it is set only
+ * for a package declaring `provides:`: absent means "one engine, no ambiguity",
+ * which is also what every instance older than the field reports.
+ *
+ * Skipped rather than failed when nothing multi-engine is installed - the
+ * contract suite's own runtime, bash, is deliberately not one.
+ */
+describe('multi-engine languages', () => {
+    async function multi_engine() {
+        const res = await fetch(BASE + '/api/v2/runtimes');
+        const body = (await res.json()) as {
+            language: string;
+            version: string;
+            runtime?: string;
+        }[];
+        return body.find(r => r.runtime);
+    }
+
+    test('execute names the engine that ran the job', async () => {
+        const rt = await multi_engine();
+        if (!rt) return;
+
+        const res = await execute({
+            language: rt.language,
+            version: rt.version,
+            files: [{ content: '' }],
+        });
+        expect(res.status).toBe(200);
+        expect(res.body.language).toBe(rt.language);
+        expect(res.body.runtime).toBe(rt.runtime);
+    });
+
+    test('the websocket runtime frame names it too', async () => {
+        const rt = await multi_engine();
+        if (!rt) return;
+
+        const out = await ws_case(ws =>
+            ws.send(
+                init({
+                    language: rt.language,
+                    version: rt.version,
+                    files: [{ content: '' }],
+                })
+            )
+        );
+        expect(out.messages[0]).toEqual({
+            type: 'runtime',
+            language: rt.language,
+            version: rt.version,
+            runtime: rt.runtime,
+        });
+    });
+
+    test('a single-engine language reports no runtime at all', async () => {
+        const res = await execute(base_req);
+        expect(res.status).toBe(200);
+        expect('runtime' in res.body).toBe(false);
+    });
+});
+
 describe('runtimes and packages', () => {
     test('GET /runtimes lists the installed runtime', async () => {
         const res = await fetch(BASE + '/api/v2/runtimes');

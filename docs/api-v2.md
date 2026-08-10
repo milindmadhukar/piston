@@ -47,6 +47,30 @@ Content-Type: application/json
 ]
 ```
 
+### Choosing between runtimes
+
+Several packages can provide one language: `javascript` is provided by node, deno and
+bun, and `typescript` by tsc, deno and bun. They appear as separate entries in the list
+above, distinguished by `runtime`.
+
+A request resolves by matching the language name **or one of its aliases**, then taking
+the highest version that satisfies the selector. Version numbers are the runtime's own, so
+they are not comparable between runtimes — node 20 outranks bun 1.3 for no reason other
+than being a bigger number.
+
+The consequence is worth stating plainly: **a bare language name is not a way to ask for a
+runtime.** To pick one, use an alias that belongs to it alone.
+
+| Request                                           | Resolves to                                      |
+| ------------------------------------------------- | ------------------------------------------------ |
+| `{"language": "javascript", "version": "*"}`      | whichever runtime has the highest version number |
+| `{"language": "bun-js", "version": "*"}`          | bun, at its highest installed version            |
+| `{"language": "javascript", "version": "1.3.14"}` | the runtime installed at that exact version      |
+
+Every runtime that shares a language is guaranteed to have at least one alias no other
+runtime of that language claims — this is enforced when the package manifests are
+validated, so it holds for any package this instance can install.
+
 ## Execute
 
 ### `POST /api/v2/execute`
@@ -72,6 +96,7 @@ Runs the given code, using the given runtime and arguments, returning the result
 
 - `language`: Name (not alias) of the runtime used
 - `version`: Version of the used runtime
+- `runtime` (_optional_): Name of the runtime that ran the job, on the same terms as in [runtimes](#runtimes) — only present when alternative runtimes exist for the language
 - `run`: Results from the run stage
 - `run.stdout`: stdout from run stage process
 - `run.stderr`: stderr from run stage process

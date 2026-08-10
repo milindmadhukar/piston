@@ -38,7 +38,13 @@ export interface ExitStatus {
 // ------------------------------------------------------- server -> client
 
 export type ServerMessage =
-    | { type: 'runtime'; language: string; version: string }
+    /**
+     * `runtime` names the engine only when the language has more than one - a
+     * package declaring `provides:`, like node, deno or bun for javascript. It
+     * is absent otherwise, and absent from every instance older than this
+     * field, so a client reads absence as "the instance did not say".
+     */
+    | { type: 'runtime'; language: string; version: string; runtime?: string }
     | { type: 'stage'; stage: Stage }
     | { type: 'data'; stream: Stream; data: string }
     | ({ type: 'exit'; stage: Stage } & ExitStatus)
