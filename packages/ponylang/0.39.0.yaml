@@ -24,14 +24,27 @@ build: |
     # i.e. https://github.com/ponylang/ponyc/blob/main/.gitmodules
     git submodule update --recursive --init
 
+    # ponyc's makefile defaults to `arch ?= native` and passes it straight
+    # through as -march, so a build inherits whatever the machine that ran it
+    # happened to support. These archives are built once in CI and installed
+    # anywhere, so ponyc itself died with SIGILL - "Illegal instruction (core
+    # dumped)" from `ponyc -b out` - on any host older than the runner.
+    #
+    # x86-64 is the baseline, and the images are linux/amd64 only. It has to be
+    # passed to every target, not just the compile: the install target copies
+    # libponyrt into lib/$(arch), so a mismatch loses the runtime libraries.
+    # (tune already defaults to generic, and -mtune cannot emit instructions
+    # the target lacks.)
+    ARCH=x86-64
+
     # Build the vendored LLVM libraries that are included in the `lib/llvm/src`.
     make libs build_flags="-j$(nproc)"
     # Configure the CMake build directory.
-    make configure
+    make configure arch="$ARCH"
     # Will build pony and put it in `build/release`.
-    make build
+    make build arch="$ARCH"
     # Install pony into `$PREFIX`.
-    make prefix="$PREFIX" install
+    make prefix="$PREFIX" arch="$ARCH" install
 
     cd ..
     rm -rf ponyc
