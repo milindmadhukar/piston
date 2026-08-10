@@ -92,6 +92,73 @@ for (const manifest of selected) {
     }
 }
 
+// ------------------------------------------------------ multi-engine languages
+
+/**
+ * Several packages can provide one language - javascript comes from node, deno
+ * and bun. A request resolves by language-or-alias plus a semver range and takes
+ * the highest version, so a bare `javascript` picks whichever engine happens to
+ * carry the biggest version number. The only stable way to ask for one engine is
+ * a name that belongs to it alone, which is what these two rules guarantee
+ * exists.
+ *
+ * Grouped by the *package* name rather than by manifest: node 18 and node 20 are
+ * one engine and share their aliases legitimately.
+ */
+const aliases_for = (manifest: Manifest, language: string): string[] =>
+    manifest.provides
+        ? (manifest.provides.find(p => p.language === language)?.aliases ?? [])
+        : (manifest.aliases ?? []);
+
+const engines_by_language = new Map<string, Map<string, Set<string>>>();
+for (const manifest of manifests) {
+    for (const language of provided_languages(manifest)) {
+        let engines = engines_by_language.get(language);
+        if (!engines) {
+            engines = new Map();
+            engines_by_language.set(language, engines);
+        }
+
+        let aliases = engines.get(manifest.language);
+        if (!aliases) {
+            aliases = new Set();
+            engines.set(manifest.language, aliases);
+        }
+
+        for (const alias of aliases_for(manifest, language)) aliases.add(alias);
+    }
+}
+
+for (const [language, engines] of engines_by_language) {
+    if (engines.size < 2) continue;
+
+    const owners = new Map<string, string[]>();
+    for (const [engine, aliases] of engines) {
+        // Reachable only by guessing an exact version number otherwise.
+        if (aliases.size === 0) {
+            note(
+                `packages/${engine}`,
+                `provides "${language}", which ${engines.size} packages provide, ` +
+                    `but declares no alias - add one naming the engine, e.g. ` +
+                    `"${engine}-${language}"`
+            );
+        }
+        for (const alias of aliases) {
+            owners.set(alias, [...(owners.get(alias) ?? []), engine]);
+        }
+    }
+
+    for (const [alias, sharers] of owners) {
+        if (sharers.length > 1) {
+            note(
+                `packages/${language}`,
+                `alias "${alias}" is claimed by ${sharers.join(' and ')}, so it ` +
+                    `names no single engine`
+            );
+        }
+    }
+}
+
 // --------------------------------------------------------------- readme list
 
 const readme = await Bun.file(path.join(ROOT, 'readme.md')).text();

@@ -552,6 +552,7 @@ export const websocket_handlers = {
                                 type: 'runtime',
                                 language: job.runtime.language,
                                 version: job.runtime.version.raw,
+                                runtime: job.runtime.runtime,
                             });
 
                             await job.execute(box, state.event_bus);

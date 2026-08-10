@@ -95,6 +95,12 @@ export interface ExecuteResult {
     run?: StageResult;
     language: string;
     version: string;
+    /**
+     * The engine that ran the job, for a language served by more than one -
+     * `bun` rather than `javascript`. Only a package declaring `provides:` has
+     * one, so this is absent for most languages and serialises away entirely.
+     */
+    runtime?: string;
 }
 
 export interface JobOptions {
@@ -596,6 +602,7 @@ export class Job {
             run,
             language: this.runtime.language,
             version: this.runtime.version.raw,
+            runtime: this.runtime.runtime,
         };
     }
 
