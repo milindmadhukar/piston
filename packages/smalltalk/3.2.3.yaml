@@ -4,6 +4,11 @@ aliases: [st]
 build: |
     set -e
 
+    # Where this package is being installed. configure defaults to /usr/local,
+    # which the build user cannot write to, so `make install` died in
+    # install-dist_pkgdataDATA.
+    PREFIX=$(realpath "$(dirname "$0")")
+
     curl -L https://ftp.gnu.org/gnu/smalltalk/smalltalk-3.2.3.tar.gz -o smalltalk-3.2.3.tar.gz
     tar xzf smalltalk-3.2.3.tar.gz
 
@@ -11,7 +16,7 @@ build: |
 
     cd smalltalk-3.2.3
 
-    ./configure
+    ./configure --prefix="$PREFIX"
     rm libc.la
 
     make
