@@ -8,7 +8,13 @@ build: |
     cd bqn
 
     git checkout 88f65850fa6ac28bc50886c5942652f21d5be924
-    make CC=gcc
+
+    # f=-w passes -w through CBQN's extra-flags hook. Buster's gcc 8 hits an
+    # internal compiler error - `in add_hint, at diagnostic-show-locus.c` -
+    # on src/gen/compiles, whose generated source is one enormous line. The
+    # crash is in the warning formatter, not in codegen, so emitting no
+    # warnings avoids it.
+    make CC=gcc f=-w
 env:
     PATH: '{pkgdir}/bin:{PATH}'
     BQN_PATH: '{pkgdir}/bqn'
