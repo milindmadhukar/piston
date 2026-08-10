@@ -122,6 +122,11 @@ jobs:
             group: pkgs-index
             cancel-in-progress: false
         steps:
+            # Needed by the coverage check below, which reads the manifests to
+            # work out what ought to be in the index. Must come first: checkout
+            # clears the workspace.
+            - uses: actions/checkout@v4
+
             - name: Download every published archive
               env:
                   GH_TOKEN: ${{ github.token }}
@@ -163,6 +168,66 @@ jobs:
                     echo '::error::refusing to publish an empty index'
                     exit 1
                   fi
-                  # --repo because this job has no checkout for gh to infer from.
                   gh release upload pkgs index --clobber \
                     --repo '${{ github.repository }}'
+
+            # A manifest is baked into the image and so is advertised by
+            # /api/v2/packages whether or not an archive exists for it. For a
+            # package that needs a toolchain, the index is the only thing that
+            # makes it installable - without a line here the API answers
+            # "no prebuilt archive is published for it" forever, and nothing
+            # else notices, because selection is by diff: a package whose one
+            # and only build was cancelled is never retried.
+            #
+            # Runs after the upload so a partial run still publishes what built.
+            - name: Check the index covers every package that needs a build
+              env:
+                  SELECTED: ${{ needs.discover.outputs.slugs }}
+              run: |
+                  # awk rather than grep: a version is full of dots, and as a
+                  # regex those match anything. The fields are compared whole.
+                  published() {
+                    awk -F, -v l="${1%%-*}" -v v="${1#*-}" \
+                      '$1 == l && $2 == v { found = 1 } END { exit !found }' index
+                  }
+
+                  # This run's own selection missing from the index is a
+                  # regression and fails the run.
+                  failed=0
+                  for slug in $(jq -r '.[]' <<< "$SELECTED"); do
+                    published "$slug" || {
+                      echo "::error::$slug was selected for build but is not in the index"
+                      failed=1
+                    }
+                  done
+
+                  # Everything else missing is backlog, not this run's doing.
+                  # Reported so it cannot sit unnoticed the way python-3.14.7 did.
+                  missing=$(.github/scripts/changed-packages.sh built |
+                    while read -r slug; do
+                      [ -n "$slug" ] || continue
+                      published "$slug" || echo "$slug"
+                    done)
+
+                  {
+                    echo "## Package index coverage"
+                    echo
+                    echo "$(wc -l < index) archives published."
+                    if [ -n "$missing" ]; then
+                      echo
+                      echo "Advertised by the image but **not installable** - no archive in the index:"
+                      echo
+                      printf '%s\n' "$missing" | sed 's/^/- /'
+                      echo
+                      echo 'Run this workflow with `packages: built` to backfill.'
+                    else
+                      echo
+                      echo 'Every package needing a source build has an archive.'
+                    fi
+                  } >> "$GITHUB_STEP_SUMMARY"
+
+                  if [ -n "$missing" ]; then
+                    echo "::warning::$(printf '%s\n' "$missing" | wc -l) packages need a source build but have no archive in the index"
+                  fi
+
+                  exit "$failed"
