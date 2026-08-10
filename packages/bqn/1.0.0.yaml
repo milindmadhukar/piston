@@ -9,6 +9,15 @@ build: |
 
     git checkout 88f65850fa6ac28bc50886c5942652f21d5be924
 
+    # The makefile builds from precompiled bytecode it copies off the bytecode
+    # branch, and it takes that branch's head rather than a generation matching
+    # the source above. The head moved on (2022-09-08 against this source's
+    # 2022-07-26) and now calls m_c8vec/m_c32vec, added in between, so the link
+    # fails with undefined references to them. Pin the ref to the last
+    # generation that predates the pinned source; the makefile checks out
+    # whatever refs/remotes/origin/bytecode points at.
+    git update-ref refs/remotes/origin/bytecode 97b16d0c2acd0c147cb7816c747dd11f6d71f55a
+
     # f=-w passes -w through CBQN's extra-flags hook. Buster's gcc 8 hits an
     # internal compiler error - `in add_hint, at diagnostic-show-locus.c` -
     # on src/gen/compiles, whose generated source is one enormous line. The
